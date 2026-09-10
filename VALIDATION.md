@@ -81,3 +81,14 @@ Pause / Resume、同一seed Reset（240 creatures / 8,616 voxels / 85 mean energ
 短時間・単一seedでのtrajectory分岐は、特定形態が特定nicheに普遍的に適応したことや、種分化を証明しません。複数seed、長時間、系統別reproductive success、より詳細なcontroller / environment ablationが次の研究課題です。
 
 GPU上のparallel衝突集計順序に由来する小差があります。再実行でfield統計の末尾や軌道が変わっても、bitwise determinismを保証していない設計上の制約です。
+
+## Continuous surface rendering update
+
+- Physics kernels, energy rules, mutation and reproduction were not changed.
+- Added a closed, connected marching-tetrahedra surface per genome, regularized MLS skinning from eight nearby physical voxels, and deformed area-weighted vertex normals.
+- CPU tests: 7 / 7 pass. The two new tests cover closed/connected surface topology, local bone bounds, bind-pose reconstruction, and translation invariance.
+- TypeScript, scoped Oxlint, and production build pass.
+- GPU/browser checks: smooth surface deformation, isolated organism inspection, live Mesh/Voxels switching, and lifecycle compaction were verified without GPU error alerts.
+- During lifecycle QA, deaths reached 238. With temporary QA settings (basal and muscle cost 0, birth threshold 90, speed 4), 3 births produced new surfaces without error. These settings were then discarded by reloading the normal defaults. This is a rendering lifecycle check, not additional evidence of adaptation.
+- Default mesh: 262,640 shared vertices / 524,384 triangles for 240 bodies. The initial material-view mesh run displayed approximately 118–119 FPS on the same M5 Max. This remains a frame-rate observation, not a GPU timestamp benchmark.
+- The visible skin is an approximation around the physical voxels; severe folds may self-intersect. It is not a change to a continuum/FEM physics model.

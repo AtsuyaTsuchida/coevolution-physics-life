@@ -21,6 +21,7 @@ export interface Config {
   physicsMutation: number;
   diffusion: number;
   mode: number;
+  surfaceMode: number;
   showVoxels: boolean;
   showField: boolean;
   showSensors: boolean;
@@ -52,6 +53,7 @@ export const defaults: Config = {
   physicsMutation: 0.008,
   diffusion: 0.12,
   mode: 1,
+  surfaceMode: 0,
   showVoxels: true,
   showField: true,
   showSensors: true,

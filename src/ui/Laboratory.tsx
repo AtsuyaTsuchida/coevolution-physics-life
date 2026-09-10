@@ -382,13 +382,19 @@ export default function Laboratory() {
           <div className="divider" />
           <p className="eyebrow">OBSERVATION</p>
           <Choice
+            label="Body rendering"
+            value={config.surfaceMode === 0 ? 'Smooth mesh' : 'Voxels'}
+            items={['Smooth mesh', 'Voxels']}
+            onChange={(v) => update('surfaceMode', v === 'Smooth mesh' ? 0 : 1)}
+          />
+          <Choice
             label="Visualization"
             value={modes[config.mode]}
             items={modes}
             onChange={(v) => update('mode', modes.indexOf(v))}
           />
           <Toggle
-            label="Creature voxels"
+            label="Creature bodies"
             value={config.showVoxels}
             onChange={(v) => update('showVoxels', v)}
           />
@@ -398,7 +404,7 @@ export default function Laboratory() {
             onChange={(v) => update('showField', v)}
           />
           <Toggle
-            label="Sensor voxels"
+            label={config.surfaceMode === 0 ? 'Sensor colors' : 'Sensor voxels'}
             value={config.showSensors}
             onChange={(v) => update('showSensors', v)}
           />
@@ -442,6 +448,20 @@ export default function Laboratory() {
             </span>
           </div>
           <div className="viewport">
+            <div className="view-tools">
+              <button
+                disabled={!metric}
+                onClick={() => engine.current?.renderer.inspectCreature()}
+              >
+                Inspect organism
+              </button>
+              <button
+                disabled={!metric}
+                onClick={() => engine.current?.renderer.worldView()}
+              >
+                World view
+              </button>
+            </div>
             <canvas
               ref={canvas}
               aria-label="Interactive 3D world with structured voxel organisms and local physical field"
@@ -507,7 +527,11 @@ export default function Laboratory() {
           </div>
           <footer>
             Drag to orbit · Scroll to zoom
-            <span>GPU compute + instanced cubes</span>
+            <span>
+              {config.surfaceMode === 0
+                ? 'GPU-deformed continuous mesh'
+                : 'GPU compute + instanced cubes'}
+            </span>
           </footer>
         </section>
       </div>
@@ -633,9 +657,9 @@ export default function Laboratory() {
         </div>
       </section>
       <p className="footnote">
-        Bodies are generated from connected voxel genomes. Movement comes from
-        muscle contraction, structural constraints and contact with the
-        environment.
+        Bodies have a continuous surface driven by connected voxel genomes.
+        Movement comes from muscle contraction, structural constraints and
+        contact with the environment.
         <br />
         No predefined gait or authored physics zones. Field inheritance is
         spatial persistence; this prototype does not establish open-ended

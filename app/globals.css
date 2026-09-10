@@ -462,3 +462,21 @@ input[type='number'] {
     letter-spacing: 2px;
   }
 }
+
+.view-tools {
+  position: absolute;
+  right: 16px;
+  top: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+.view-tools button {
+  font-size: 12px;
+  padding: 7px 10px;
+  background: #13252cde;
+  border-color: #36505c;
+}
+.view-tools button:hover {
+  background: #29424b;
+}

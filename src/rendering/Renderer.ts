@@ -7,6 +7,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import code from '../shaders/render.wgsl?raw';
 import { buffer, shader } from '../core/GPUContext';
+import { CreatureSurface } from './CreatureSurface';
 import type { Simulation } from '../core/Simulation';
 export class Renderer {
   context: GPUCanvasContext;
@@ -21,10 +22,13 @@ export class Renderer {
   format: GPUTextureFormat;
   observer: ResizeObserver;
   sim?: Simulation;
+  surface: CreatureSurface;
+  focusedSlot = -1;
   constructor(
     public device: GPUDevice,
     public canvas: HTMLCanvasElement,
   ) {
+    this.surface = new CreatureSurface(device);
     this.context = canvas.getContext('webgpu')!;
     if (!this.context) throw new Error('WebGPU canvas initialization failed.');
     this.format = navigator.gpu.getPreferredCanvasFormat();
@@ -94,6 +98,7 @@ export class Renderer {
     });
   }
   async initialize(sim: Simulation) {
+    await this.surface.initialize(sim);
     const shaderModule = await shader(
       this.device,
       'GPU instanced voxel renderer',
@@ -106,7 +111,7 @@ export class Renderer {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
-        ...[1, 2, 3].map((binding) => ({
+        ...[1, 2, 3, 4, 5, 6].map((binding) => ({
           binding,
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' as const },
@@ -116,7 +121,7 @@ export class Renderer {
     const pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [layout],
     });
-    for (const name of ['voxel', 'ground', 'slice', 'arrow'])
+    for (const name of ['voxel', 'mesh', 'ground', 'slice', 'arrow'])
       this.pipelines[name] = await this.device.createRenderPipelineAsync({
         label: name,
         layout: pipelineLayout,
@@ -170,9 +175,15 @@ export class Renderer {
       [0, 1].map((f) =>
         this.device.createBindGroup({
           layout,
-          entries: [this.uniform, sim.state[s], sim.meta, sim.field[f]].map(
-            (buffer, binding) => ({ binding, resource: { buffer } }),
-          ),
+          entries: [
+            this.uniform,
+            sim.state[s],
+            sim.meta,
+            sim.field[f],
+            this.surface.vertices,
+            this.surface.deformed,
+            this.surface.normalLinks,
+          ].map((buffer, binding) => ({ binding, resource: { buffer } })),
         }),
       ),
     );
@@ -180,6 +191,20 @@ export class Renderer {
   render() {
     const s = this.sim;
     if (!s || !this.depth) return;
+    if (this.surface.rebuild(s)) this.attach(s);
+    if (this.focusedSlot >= 0) {
+      if (!s.manager.individuals.has(this.focusedSlot)) this.worldView();
+      else if (s.lastSnapshot) {
+        const k = this.focusedSlot * 32;
+        const target = new Vector3(
+          s.lastSnapshot[k + 16],
+          s.lastSnapshot[k + 17],
+          s.lastSnapshot[k + 18],
+        );
+        this.camera.position.add(target.clone().sub(this.orbit.target));
+        this.orbit.target.copy(target);
+      }
+    }
     this.orbit.update();
     this.camera.updateMatrixWorld();
     const vp = this.camera.projectionMatrix
@@ -197,10 +222,12 @@ export class Renderer {
       +c.showField,
       +c.showGravity,
       c.glyphStep,
-      0,
+      this.focusedSlot + 1,
     ]);
     this.device.queue.writeBuffer(this.uniform, 0, data);
     const e = this.device.createCommandEncoder();
+    if (c.surfaceMode === 0 && c.showVoxels)
+      this.surface.deform(e, s.voxelIndex);
     const pass = e.beginRenderPass({
       colorAttachments: [
         {
@@ -221,20 +248,47 @@ export class Renderer {
     pass.setPipeline(this.pipelines.ground);
     pass.draw(6);
     if (c.showVoxels) {
-      pass.setPipeline(this.pipelines.voxel);
-      pass.setVertexBuffer(0, this.vertices);
-      pass.draw(this.count, s.manager.total);
+      if (c.surfaceMode === 0) {
+        pass.setPipeline(this.pipelines.mesh);
+        pass.setIndexBuffer(this.surface.indices, 'uint32');
+        pass.drawIndexed(this.surface.indexCount);
+      } else {
+        pass.setPipeline(this.pipelines.voxel);
+        pass.setVertexBuffer(0, this.vertices);
+        pass.draw(this.count, s.manager.total);
+      }
     }
-    if (c.showField) {
+    if (c.showField && this.focusedSlot < 0) {
       pass.setPipeline(this.pipelines.slice);
       pass.draw(6);
     }
-    if (c.showGravity) {
+    if (c.showGravity && this.focusedSlot < 0) {
       pass.setPipeline(this.pipelines.arrow);
       pass.draw(6, Math.ceil(32 / c.glyphStep) ** 2);
     }
     pass.end();
     this.device.queue.submit([e.finish()]);
+  }
+  inspectCreature() {
+    const sim = this.sim;
+    if (!sim?.lastSnapshot || !sim.manager.individuals.size) return;
+    const states = sim.lastSnapshot;
+    const organism = [...sim.manager.individuals.values()].sort(
+      (a, b) =>
+        Math.hypot(states[a.slot * 32 + 16], states[a.slot * 32 + 18]) -
+        Math.hypot(states[b.slot * 32 + 16], states[b.slot * 32 + 18]),
+    )[0];
+    this.focusedSlot = organism.slot;
+    const k = organism.slot * 32;
+    this.orbit.target.set(states[k + 16], states[k + 17], states[k + 18]);
+    this.camera.position.copy(this.orbit.target).add(new Vector3(2.5, 1.7, 3));
+    this.orbit.update();
+  }
+  worldView() {
+    this.focusedSlot = -1;
+    this.orbit.target.set(0, 1, 0);
+    this.camera.position.set(25, 24, 30);
+    this.orbit.update();
   }
   dispose() {
     this.observer.disconnect();
@@ -242,6 +296,7 @@ export class Renderer {
     this.depth?.destroy();
     this.uniform.destroy();
     this.vertices.destroy();
+    this.surface.dispose();
     this.context.unconfigure();
   }
 }

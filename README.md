@@ -117,11 +117,23 @@ Voxel単位で物理場をsample → 運動・変形・消費が変化 → 摂�
 
 ## Rendering / Controls
 
-raw WebGPU RenderPipelineで同じGPUBufferを直接読み、全active cubeを1 instanced drawで描画します。Three.jsはcamera / orbit / cube geometryに使用。Three.js WebGPURenderer内部bufferとの非公開API連携を避け、ComputeとRender間のzero-copyとWGSL layoutを明示する設計を選びました。UIはlil-guiと同等の操作をReact + Shadcn controlsで提供します。
+初期表示は連続したSmooth meshです。Body renderingから従来のVoxels表示へ切り替えられます。raw WebGPUで物理状態のGPUBufferを直接読みます。Smooth meshは全個体を一つのindexed mesh batch、Voxelsは全active cubeを一つのinstanced drawで描画します。Three.jsはcamera / orbit / cube geometryに使用。UIはReact + Shadcn controlsです。
 
 Creature / Material / Stress / Gravity / Drag / Viscosity / Adhesion / Energy / Physics Diversityの9モード。XY / XZ / YZ slice位置、gravity arrow密度、body・sensor表示を変更可能。field sliceは指定モードのスカラー値、Material / Creature / Stressのときはgravity大きさを表示します。Physics Diversity表示は初期基準からの局所偏差で、metricsの空間分散とは異なります。Energy表示はnutrient availabilityです。
 
-cubeは世界軸方向に描画するため、弾性Voxel要素の回転・せん断された面までは再構成しません。全volume raymarchingは未実装です。
+### Continuous deforming mesh
+
+`SurfaceMesh.ts` は身体のrest positionからGaussian density fieldを作り、marching tetrahedraで閉じた表面を抽出します。正負のLaplacian smoothingで格子由来の角張りを緩和します。生成は初期化と出生時のみで、形態が変異すると子の表面も変化します。
+
+各表面頂点を近傍8個の物理Voxelへmoving-least-squares weightsで結び付けます。`skin.wgsl` がGPU上で表面を変形し、描画shaderが変形後の三角形から滑らかな法線を再計算します。材質色とstressも補間します。物理位置をCPUへ追加readbackする処理はありません。
+
+skin metadataは96 B/vertex、変形結果は32 B/vertex、triangle indexとnormal adjacencyはu32です。出生・死亡に伴う物理bufferの詰め直しには、creature slotから現在のvoxel offsetを参照して追従します。seed 2048の240個体で約26.3万表面頂点・52.4万三角形です。
+
+Inspect organismで1個体を拡大・追尾し、World viewで全体表示へ戻ります。観察中は他個体と場の描画を隠しますが、全個体の物理計算は継続します。対象が死亡すると全体表示へ戻ります。Smooth meshのSensor colorsは色の強調を変更し、表面に穴を開けません。
+
+表面Meshは描画専用で、衝突・エネルギー・遺伝子・selection pressureは既存Voxel物理のままです。Mesh FEMへ物理モデルを変更したものではありません。強い折り畳みでは表面の自己交差が起こり得ます。局所skinningは近似で、厳密な体積保存や完全な回転再現は保証しません。高個体数ではcubeよりGPUメモリ・描画負荷が増えます。
+
+従来のVoxels表示は世界軸方向のcubeです。全volume raymarchingは未実装です。
 
 ## Metrics
 
