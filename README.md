@@ -1,10 +1,10 @@
 # Coevolution of Physics and Life
 
-WebGPU上の構造化Voxel生物と、局所物理法則の共進化を観測する研究プロトタイプ。TypeScript / WGSL / Vite（Vinext）で実装しています。
+A research prototype for structured voxel organisms and evolving local physical conditions, implemented with WebGPU, TypeScript, WGSL, and Vite (Vinext).
 
 ## Run
 
-Node.js 22.13以降とpnpm、WebGPU対応GPU・ブラウザが必要です。HTTPSまたはlocalhostで開いてください。
+Requires Node.js 22.13 or later, pnpm, and a WebGPU-capable browser and GPU. Open the application over HTTPS or localhost.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -14,11 +14,11 @@ pnpm typecheck
 pnpm build
 ```
 
-開発サーバーのURLを開くと4体の大型生物を観察するFour giantsで開始します。World modeをCoevolution colonyに切り替えると従来の240個体、約8,600 active voxelsの共進化モードに戻ります。ドラッグで回転、ホイールでズーム。WebGPUが使用できない場合は明示的なエラーを表示し、別方式の擬似シミュレーションに置き換えません。
+The application starts in **Four giants**, an observation mode with four large organisms. Select **World mode → Coevolution colony** for the original population of 240 organisms and approximately 8,600 active voxels. Drag to orbit and scroll to zoom. If WebGPU is unavailable, the application displays an error rather than substituting a different simulation.
 
 ## Concept
 
-生命が固定された物理世界に適応するだけでなく、身体の各部位が局所物理場に作用し、その変化した環境が次の生存・繁殖条件になります。
+Organisms interact with local physical conditions through their bodies. The modified environment then affects movement, energy balance, survival, and reproduction.
 
 ```text
 Genome → connected morphology → muscle contraction → physical motion
@@ -30,192 +30,197 @@ reproduction ← energy balance ← local laws ← body-voxel influence
 
 > What happens when embodied organisms do not merely adapt to a fixed physical world, but can modify and inherit the local physical conditions that constitute their evolutionary environment?
 
-この実装でいう物理の「継承」は、場所に残存し拡散する環境状態です。物理領域が生物と同じ方式で子領域を産む、という意味ではありません。
+Here, physical “inheritance” means environmental state that persists at a location and diffuses through space. Physical regions do not reproduce by producing offspring regions.
 
 ## Voxel Creature
 
-身体は最大8 × 8 × 8の局所格子から抽出した20〜80個のoccupied cellsです。連結した身体に6面近傍と最大20個の斜め近傍の距離拘束を形成します。26近傍によって単純な6近傍格子のせん断崩壊を軽減します。全512セルを物理計算することはありません。
+In colony mode, each body contains 20–80 occupied cells drawn from a local 8 × 8 × 8 lattice. Distance constraints connect face neighbors and up to 20 diagonal neighbors. This 26-neighbor structure reduces the shear collapse of a face-only lattice. Only occupied cells are simulated, not all 512 potential cells. Four giants uses the larger bodies and extended constraints described below.
 
-材質はSoft / Rigid / Muscle X / Muscle Y / Muscle Z / Sensor / Energy Storageの7種類。密度、剛性、減衰、筋活動、栄養摂取効率が異なります。初期身体はseed付きの確率的な連結成長で生成し、種や歩容は定義していません。
+Seven materials are available: Soft, Rigid, Muscle X, Muscle Y, Muscle Z, Sensor, and Energy Storage. They differ in density, stiffness, damping, actuation, and nutrient uptake. Colony founders use seeded stochastic connected growth, without predefined species or gaits.
 
 ## Genome
 
-`CreatureGenome.ts` は1セルにつきoccupancy、material、stiffness、amplitude、frequency、phaseの6 floatを保持する直接encodingです。個体ごとに環境選好8値とcontroller係数4値も遺伝します。身体セルはtyped arrayであり、シミュレーションVoxelごとのJavaScript objectは生成しません。
+`CreatureGenome.ts` directly encodes six floats per cell: occupancy, material, stiffness, amplitude, frequency, and phase. Each organism also inherits eight environmental preferences and four controller coefficients. Body cells use typed arrays rather than a JavaScript object per simulated voxel.
 
-`Mutation.ts` はVoxel追加・除去、材質、剛性、筋振幅・周波数・位相、環境選好、controllerを変更します。除去後にcoreからBFSし、分断する除去をrejectします。追加と除去を同時に行う場合も、追加後のoccupancyに対して接続性を検査します。
+`Mutation.ts` changes voxel occupancy, material, stiffness, muscle amplitude/frequency/phase, preferences, and controller coefficients. A breadth-first search from the core rejects removals that disconnect the body. When addition and removal occur together, connectivity is checked against the occupancy after addition.
 
 ## Morphology
 
-`MorphologyGenerator` interfaceと`DirectMorphologyGenerator`を分離しています。CPPN、L-System、NCA等はこのinterfaceの生成側を交換して実装できます。出力はactive metadata、adjacency、形態descriptorです。
+The `MorphologyGenerator` interface is separate from `DirectMorphologyGenerator`. Alternative generators such as CPPNs, L-systems, or NCAs can replace the generation stage. Outputs are active metadata, adjacency, and morphology descriptors.
 
-DescriptorはVoxel数、bounding box比、露出面数、compactness、X対称性、平均剛性、材質比率、格子内重心。対称性は8セル格子の中央面に対する近似で、姿勢不変な分類器ではありません。
+Descriptors include voxel count, bounding-box ratios, exposed faces, compactness, X symmetry, mean stiffness, material fractions, and lattice center of mass. Symmetry is measured relative to the middle plane of the eight-cell lattice; it is not a pose-invariant classifier.
 
 ## GPU Simulation
 
-固定刻み1/120秒。各stepの冒頭で地面への荷重集計・地面変形を行います。描画フレームの時間から必要なstep数を決め、1 frame最大8 stepに制限します。遅いGPUではsimulation timeがwall timeより遅くなります。速度スライダーは目標倍率です。
+The fixed timestep is 1/120 second. Ground loading and deformation run at the start of each step. Frame timing determines the number of steps, capped at eight per frame. On slower GPUs, simulated time may advance more slowly than wall time. The speed slider specifies a target multiplier.
 
-各stepで次を順番にdispatchします。
+After ground updates, each step dispatches these kernels in order:
 
-1. `sensors.wgsl`：Sensor材質から栄養勾配、局所重力、粘性を個体ごとに集約。
-2. `actuator.wgsl`：4入力の線形controller＋tanhから振幅・位相を変調。X/Y/Z筋は該当軸のrest vectorを周期変化。
-3. `voxelForces.wgsl`：Voxelの現在位置で物理場をsample。重力、drag、露出面数に依存するviscous drag、材質減衰を適用して積分。
-4. `constraints.wgsl`：complianceを持つJacobi PBDを複数iteration。各bondの両端で同じdegree正規化を使い、質量で重み付け。**蓄積Lagrange multiplierを持つ完全なXPBDではありません。**
-5. `spatialGrid.wgsl`：固定3D格子のheadをclearし、atomic exchangeでVoxelのlinked listを構築。
-6. `collision.wgsl`：27近傍セルで異なる個体の近接Voxelを反発。地面、world bounds、局所adhesion由来のCoulomb型摩擦、速度再計算。
-7. `energy.wgsl`：個体単位のGPU reduction。基礎代謝、筋活動、strain、粘性散逸、栄養摂取、重心、移動距離、局所物理平均を計算。
-8. `physicsInfluence.wgsl`：各身体Voxelが占有するPhysics Cellへ、その個体の選好をfixed-point atomic加算。
-9. `physicsField.wgsl`：影響を平均し、6近傍拡散とseed付き低頻度変異を適用。パラメータをclamp。
+1. `sensors.wgsl`: aggregates nutrient gradients, local gravity, and viscosity from sensor voxels.
+2. `actuator.wgsl`: modulates amplitude and phase using a four-input linear controller followed by tanh. Axis-specific muscles periodically change rest-vector scales. Four giants uses authored coordinated contractions.
+3. `voxelForces.wgsl`: samples the field at each voxel, applies gravity, drag, exposure-dependent viscous drag and material damping, then integrates motion.
+4. `constraints.wgsl`: performs multiple compliant Jacobi PBD iterations, with mass weighting and symmetric degree normalization at both bond endpoints. **This is not full XPBD with accumulated Lagrange multipliers.**
+5. `spatialGrid.wgsl`: clears the fixed 3D grid and builds voxel linked lists using atomic exchange.
+6. `collision.wgsl`: applies repulsion between nearby voxels of different organisms across 27 neighboring cells, resolves ground and world bounds, applies adhesion-dependent Coulomb-like friction, and recomputes velocity.
+7. `energy.wgsl`: reduces basal, muscle, strain and viscous costs, nutrient uptake, center of mass, distance, and local physical statistics per organism.
+8. `physicsInfluence.wgsl`: deposits each organism’s preferences into occupied physics cells using fixed-point atomics.
+9. `physicsField.wgsl`: averages influences, applies six-neighbor diffusion and seeded low-frequency mutation, and clamps parameters.
 
-身体の移動は筋収縮、格子拘束、外力、接触から生じます。`walk` / `swim` / `crawl`等の移動コードや直接的な目的方向への推進力はありません。
+Motion arises from muscle contractions, constraints, external forces, and contact. There are no direct `walk`, `swim`, or `crawl` translation functions or target-directed propulsion forces.
 
-### Memory layout / alignment
+### Memory layout and alignment
 
-WGSLの`vec4f`単位（16 byte alignment）で明示的にpackしています。CPU側Float32Arrayのoffsetと対応します。
+Data is explicitly packed in 16-byte-aligned WGSL `vec4f` units, matching CPU Float32Array offsets.
 
-|Buffer|Stride|内容|
+| Buffer | Stride | Contents |
 |---|---:|---|
-|Voxel state A/B|64 B|position.xyz + voxel energy、velocity.xyz + strain、previous position.xyz + nutrient sample、cost / uptake / strain / reserved|
-|Voxel metadata|64 B|rest.xyz + material、mass / stiffness / damping / creature ID、amplitude / frequency / phase / exposed faces、adjacency offset / count / grid cell / reserved|
-|Adjacency|4 B|隣接active voxelのu32 index。rest lengthはmetadataのrest vectorから導出|
-|Actuator|16 B|XYZ rest scale + actuation effort|
-|Creature state|128 B|offset / count / energy / age、選好2 vec4、controller、center / offspring、sensor、distance / cost / local g / local viscosity、genome ID / born / generation / alive|
-|Physics field A/B|48 B|gravity.xyz / drag、viscosity / adhesion / repulsion strength / falloff、nutrient availability / occupancy / last law change / reserved|
-|Influence deposits|48 B|12 atomic i32。count＋8選好sum、残り予約。量子化1024単位|
-|Spatial heads / next|4 B each|cell headまたはnext index。空は-1|
-|Simulation uniform|96 B|6 vec4。時間・counts・mechanics・ecology・field evolution・seed|
-|Camera uniform|112 B|mat4＋3 vec4|
+| Voxel state A/B | 64 B | Position and voxel energy; velocity and strain; previous position and nutrient sample; cost, uptake, strain, reserved |
+| Voxel metadata | 64 B | Rest position and material; mass, stiffness, damping, creature ID; amplitude, frequency, phase, exposed faces; adjacency offset/count, lattice cell, body scale |
+| Adjacency | 4 B | Neighbor active-voxel u32 index; rest length is derived from metadata |
+| Actuator | 16 B | XYZ rest scales and actuation effort |
+| Creature state | 128 B | Offset/count/energy/age; two preference vectors; controller; center/offspring; sensors; distance/cost/local gravity/viscosity; genome ID/birth time/generation/alive |
+| Physics field A/B | 48 B | Gravity/drag; viscosity/adhesion/repulsion/falloff; nutrient availability/occupancy/latest law change/reserved |
+| Influence deposits | 48 B | Twelve atomic i32 values: count, eight preference sums, and reserved entries; quantization factor 1024 |
+| Spatial heads / next | 4 B each | Cell head or next index; −1 means empty |
+| Simulation uniform | 96 B | Six vectors containing time, counts, mechanics, ecology, field evolution, seed, and ground/mode settings |
+| Camera uniform | 112 B | Matrix and three vectors |
 
-PBD・積分・衝突はread/write分離したVoxel A/B、物理場は別のA/B。pass間はcommand encoder順序で同期します。depositsは別passでclear→atomic accumulate→field read。CPUはshader内部のworkgroupを跨ぐbarrierに依存しません。
+Integration, constraints, and collision use separate read/write voxel buffers. The field has its own pair of buffers. Command-encoder ordering synchronizes passes. Deposits use separate clear, atomic accumulation, and field-read passes; cross-workgroup synchronization is not assumed within a dispatch.
 
-GPU bufferはmax population × 80のcapacityを確保しますが、**先頭のactive rangeだけをdispatch・render**します。出生・死亡時のみCPUがmetadataを再packし、生存Voxel状態はGPU-to-GPU copyでcompactionします。既存個体の位置・速度をreadbackして再uploadしません。物理場は出生や世代更新で初期化しません。
+Colony buffers reserve maximum population × 80 voxels, but **only the active range is dispatched and rendered**. On births and deaths, the CPU repacks metadata and compacts survivor states through GPU-to-GPU copies. Existing positions and velocities are not read back and uploaded again. Generational changes do not reset the field.
 
-個体管理は固定slot、身体active listはdense packingです。Voxel storage capacityの全512格子への拡張は不要です。現在の最大GUI設定は1,000個体（80,000 Voxel capacity）。100,000以上はcapacity設定とメモリ制限の再評価が必要です。
+Organisms occupy stable slots, while body voxels use dense packing. The colony UI supports up to 1,000 organisms, or 80,000 voxel capacity. Capacities above 100,000 require a memory-limit review.
 
 ### CPU readback
 
-通常はsimulation time 1秒ごとに個体summary（128 B × max count）と物理場の計測snapshot（786,432 B）を一度readbackします。地面snapshot（67,600 B）も同じタイミングで取得し、デフォルト合計約0.92 MB / simulated second。CPUがこの時点で死亡・繁殖を処理するため、反映には最大約1 simulated secondの遅延があります。各フレームの位置readbackはありません。検証時だけ単体身体の全状態をreadbackします。
+Once per simulated second, the application reads organism summaries (128 B × maximum count), the field snapshot (786,432 B), and the ground snapshot (67,600 B). This totals approximately 0.92 MB per simulated second with the 240-organism colony configuration. Birth and death processing can therefore lag by up to one simulated second. There is no per-frame position readback. Diagnostic experiments additionally read full body states.
 
-将来はfield平均・分散もGPU reductionし、field全体の低頻度readbackをさらに削減できます。
+Field mean/variance reductions on the GPU could further reduce snapshot traffic.
 
 ## Physics Field
 
-身体格子と完全に別の32 × 16 × 32 world grid。範囲X/Z = −20…20、Y = 0…20、セル幅1.25。各Voxelが自身の位置でnearest-cell sampleします。頭と脚が別セルにあれば異なる力を受けます。
+The field is a separate 32 × 16 × 32 world grid spanning X/Z = −20…20 and Y = 0…20, with cell width 1.25. Each body voxel samples its nearest field cell independently, so different parts of the body can experience different forces.
 
-初期場はgravity (0,−7,0)、drag .35、viscosity .3、adhesion .5付近の微小random variation。作成済みzoneはありません。場のgravity大きさは0.5…20、drag/viscosity/adhesion/repulsionは0…5、falloffは0…4に制限します。repulsionがinteraction strengthを兼ねる簡略化です。
+Initial conditions have small random variations around gravity (0, −7, 0), drag 0.35, viscosity 0.3, and adhesion 0.5. No physical zones are authored in the normal world. Gravity magnitude is clamped to 0.5–20; drag, viscosity, adhesion, and repulsion to 0–5; and falloff to 0–4. Repulsion also serves as interaction strength in this simplified model.
 
-変異は120 stepごとにhash PRNGで加え、時間依存のsin noiseで場を置き換えません。拡散は現在値の隣接平均への緩和です。生物が死んでも、改変された場はその場所に残ります。
+A hash PRNG introduces mutation every 120 steps. The field is not replaced by time-dependent sine noise. Diffusion relaxes values toward neighboring averages. Modified conditions persist after an organism dies.
 
 ## Coevolution
 
-Voxel単位で物理場をsample → 運動・変形・消費が変化 → 摂食とenergy balanceが変わる → energy閾値を超えた個体が変異した子を産む → 異なる身体・筋・controller・選好の分布 → 局所場を異なる方向へ改変、という閉ループです。
+The colony loop connects voxel-level field sampling, motion and deformation, energy expenditure and uptake, reproduction above an energy threshold, inherited mutation, and subsequent changes to local physical conditions.
 
-生物が物理場へ作用する強さはそのcellの身体Voxel密度に依存します。特定gravityをfitnessの正解として指定しません。代謝・筋活動・変形・粘性散逸という実際の状態コストを使用します。
+Influence depends on body-voxel density in each field cell. No particular gravity value is declared an optimal fitness target. Costs depend on actual metabolic, muscle, strain, and viscous state.
 
-栄養は連続的な位置関数とGPU上のresource availabilityで構成し、占有密度によって消耗、時間とともに回復します。これは物理law evolutionのON/OFFとは独立です。地面から離れるほど摂取が減衰し、Energy Storage材質は摂取効率が高くなります。保存的な流体・化学物質輸送や閉じた熱力学系ではありません。
+Nutrients combine a continuous spatial function with GPU resource availability. Occupancy depletes availability and time restores it, independently of the physics-evolution toggle. Uptake decreases with height above the ground; Energy Storage material increases uptake efficiency. This is neither conservative fluid/chemical transport nor a closed thermodynamic system.
 
-8秒齢以降、energy ≥ thresholdの個体から42%を子へ渡し、追加で5 energyの出生コストを引きます。capacityに空きがある場合にのみ繁殖します。死亡はenergy ≤ 0。全滅時の自動random補充、世代ごとの一括fitness選抜、手動speciesラベルはありません。
+After age eight seconds, an eligible parent transfers 42% of its energy to its child and pays an additional five-unit birth cost. Reproduction requires free capacity. Organisms die at energy ≤ 0. There is no automatic replacement after extinction, batch selection by generation, or manual species labeling. Four giants disables this lifecycle for observation.
 
-## Rendering / Controls
+## Rendering and Controls
 
-初期表示は連続したSmooth meshです。Body renderingから従来のVoxels表示へ切り替えられます。raw WebGPUで物理状態のGPUBufferを直接読みます。Smooth meshは全個体を一つのindexed mesh batch、Voxelsは全active cubeを一つのinstanced drawで描画します。Three.jsはcamera / orbit / cube geometryに使用。UIはReact + Shadcn controlsです。
+The initial body style is **Smooth mesh**. **Body rendering** also provides **Voxels** and **Wireframe**. Raw WebGPU reads physical GPU buffers directly. Smooth surfaces share one indexed mesh batch; voxel cubes use an instanced draw. Three.js provides camera, orbit controls, and cube geometry. The UI uses React and Shadcn controls.
 
-Creature / Material / Stress / Gravity / Drag / Viscosity / Adhesion / Energy / Physics Diversityの9モード。XY / XZ / YZ slice位置、gravity arrow密度、body・sensor表示を変更可能。field sliceは指定モードのスカラー値、Material / Creature / Stressのときはgravity大きさを表示します。Physics Diversity表示は初期基準からの局所偏差で、metricsの空間分散とは異なります。Energy表示はnutrient availabilityです。
+Nine visualization modes cover Creature, Material, Stress, Gravity, Drag, Viscosity, Adhesion, Energy, and Physics Diversity. Controls include XY/XZ/YZ slices, slice position, gravity-vector spacing, bodies, and sensors. The field slice shows the selected scalar, defaulting to gravity magnitude for Creature, Material, and Stress. Physics Diversity coloring represents local deviation from the initial reference, not the spatial variance metric. Energy coloring shows nutrient availability.
 
 ### Continuous deforming mesh
 
-`SurfaceMesh.ts` は身体のrest positionからGaussian density fieldを作り、marching tetrahedraで閉じた表面を抽出します。正負のLaplacian smoothingで格子由来の角張りを緩和します。生成は初期化と出生時のみで、形態が変異すると子の表面も変化します。
+`SurfaceMesh.ts` builds a Gaussian density field from rest positions and extracts a closed surface using marching tetrahedra. Alternating positive and negative Laplacian smoothing reduces lattice corners. Surfaces are generated at initialization and birth; mutated offspring receive a new surface.
 
-各表面頂点を近傍8個の物理Voxelへmoving-least-squares weightsで結び付けます。`skin.wgsl` がGPU上で表面を変形し、描画shaderが変形後の三角形から滑らかな法線を再計算します。材質色とstressも補間します。物理位置をCPUへ追加readbackする処理はありません。
+Each surface vertex binds to eight nearby physical voxels using regularized moving-least-squares weights. `skin.wgsl` deforms the surface on the GPU. The rendering shader recomputes smooth normals from deformed triangles and interpolates material colors and stress. Skinning does not add CPU position readback.
 
-skin metadataは96 B/vertex、変形結果は32 B/vertex、triangle indexとnormal adjacencyはu32です。出生・死亡に伴う物理bufferの詰め直しには、creature slotから現在のvoxel offsetを参照して追従します。seed 2048の240個体で約26.3万表面頂点・52.4万三角形です。
+Skin metadata uses 96 B per vertex, deformed state 32 B per vertex, and u32 triangle/normal-adjacency indices. Stable creature slots resolve current voxel offsets after compaction. The seed-2048 colony has about 262,640 surface vertices and 524,384 triangles.
 
-Inspect organismで1個体を拡大・追尾し、World viewで全体表示へ戻ります。観察中は他個体と場の描画を隠しますが、全個体の物理計算は継続します。対象が死亡すると全体表示へ戻ります。Smooth meshのSensor colorsは色の強調を変更し、表面に穴を開けません。
+**Inspect organism** follows one organism; **World view** returns to the full world. Inspection hides other bodies and field overlays while all physics continues. If the target dies, the camera returns to the world. Sensor colors changes emphasis without making holes.
 
-表面Meshは描画専用で、衝突・エネルギー・遺伝子・selection pressureは既存Voxel物理のままです。Mesh FEMへ物理モデルを変更したものではありません。強い折り畳みでは表面の自己交差が起こり得ます。局所skinningは近似で、厳密な体積保存や完全な回転再現は保証しません。高個体数ではcubeよりGPUメモリ・描画負荷が増えます。
+The organism surface is visual geometry over voxel physics, not a continuum/FEM body. Severe folding can cause self-intersections. Local skinning does not guarantee exact volume preservation or rotational reconstruction. Smooth meshes require more rendering memory and work than cubes. The voxel view uses world-axis-aligned cubes. Full-volume raymarching is not implemented.
 
-従来のVoxels表示は世界軸方向のcubeです。全volume raymarchingは未実装です。
+### Wireframe
+
+Wireframe draws only the triangle edges, deduplicated so each edge is drawn once. Faces are omitted and rear edges remain visible. It uses the same deformed GPU vertices as Smooth mesh, so style changes preserve the ongoing physical state. Ground rendering remains visible.
 
 ## Metrics
 
-毎simulated secondに記録します。生存数、active voxels、出生・死亡、平均サイズ・energy・死亡済個体の平均寿命、生存個体の平均offspring、移動距離、distance / cumulative energy expenditure、平均世代を含みます。
+Metrics are recorded each simulated second: population, active voxels, births/deaths, mean size and energy, mean lifetime of deceased organisms, mean offspring of survivors, movement distance, distance per cumulative energy expenditure, and mean generation.
 
-- Genome diversity：最大64組の隣り合う個体のoccupancy/material距離の近似。全遺伝パラメータ距離ではありません。
-- Genome fingerprint：全個体の遺伝子・選好・controllerの順序非依存32bit集計hash。衝突可能性があるため、科学的同一性の証明には元genomeを使ってください。
-- Morphology diversity：最大64組の正規化descriptor距離。
-- Material distribution：全active voxelsに占める各材質の割合。
-- Size histogram：20…80 Voxelの個体数。
-- Physics diversity：Var(|gravity|)/400 + Var(drag)/25 + Var(viscosity)/25。
-- Gravity / drag / viscosityの平均と分散。
-- 剛性対局所gravity、サイズ対局所gravity、筋比率対局所viscosityのPearson r。個体内全Voxelのsampleを平均。分散不足はnull。
+- Genome diversity: approximate occupancy/material distance for up to 64 adjacent organism pairs, not all inherited parameters.
+- Genome fingerprint: order-independent 32-bit aggregate hash of genes, preferences, and controllers. Hash collisions are possible; use original genomes for scientific identity checks.
+- Morphology diversity: normalized descriptor distance for up to 64 pairs.
+- Material distribution: fraction of active voxels in each material.
+- Size histogram: colony body-size bins spanning 20–80 voxels.
+- Physics diversity: Var(|gravity|)/400 + Var(drag)/25 + Var(viscosity)/25.
+- Gravity, drag, and viscosity means and variances.
+- Pearson correlations for stiffness versus local gravity, size versus local gravity, and muscle fraction versus local viscosity. Samples are averaged over each body; insufficient variance returns null.
 
-相関は因果の証明ではありません。UIの「Run 4 success tests」で対照実験を行い、ExportからJSONを保存してください。exportは初期設定、途中の設定変更時刻、全記録、現在genome、最後のfield / ground snapshot、検証結果を含みます（schemaVersion 2）。
+Correlation does not establish causation. Use **Run 4 success tests** for controls. JSON exports include initial settings, timed parameter changes, records, current genomes, latest field/ground snapshots, and validation results (schema version 2).
 
 ## Experiments
 
-A Fixed / B Slow / C Strong / D Unstableの4 preset。preset選択は現在のworldへ適用し、Resetでseedから再構築します。seed・population設定はReset時に反映されます。
+Four presets provide Fixed, Slow, Strong, and Unstable physical evolution. Presets affect the current world; Reset reconstructs it from the seed. Seed and population changes take effect on Reset.
 
-組込み検証は以下を行います。
+The original GPU validation suite uses a flat floor and performs:
 
-1. 単一個体で筋OFF / ON、水平gravityなし、同じseedを比較。settle 4 s後の14 sにおける水平重心移動と変形を計測。
-2. 同一genomeをdiagnostic fieldの別位置（x = −10 / +10）に配置し、局所gravity 2 / 14で比較。この診断だけ人為的なfieldを使用し、通常のworld・共進化実験には持ち込みません。
-3. 120 sの共進化でfield分散が増えるか確認。さらに同じ変異・拡散で**creature influence = 0**としたablationと比較し、活動由来の構造を区別。
-4. 32 founders、同seed、同栄養源でFixed / Coevolutionを120 sずつ実行。初期genome hash一致と、出生・死亡、形態descriptor、body size histogram、material distribution、genome hashの分岐を検査。
+1. A single matched-seed organism with muscles OFF/ON and no horizontal gravity. Measure displacement and deformation for 14 seconds after four seconds of settling.
+2. The same genome at x = −10/+10 in a diagnostic field with local gravity magnitudes 2/14. These authored zones are used only in this diagnostic.
+3. A 120-second field-diversity comparison, including an influence = 0 ablation with matching mutation and diffusion.
+4. Fixed versus coevolving environments for 120 seconds with 32 matched founders and matching nutrients. Check initial genome hashes and divergence in lifecycle, morphology, size histogram, material distribution, and genome fingerprint.
 
-全テストは同じGPU Computeコードを実行し、CPU物理による代用ではありません。パス閾値は工学的smoke testです。複数seed、複数GPU、長期間の統計的研究を代替しません。
+Tests run the actual GPU compute kernels. Their thresholds are engineering smoke tests, not substitutes for multiple seeds, GPUs, or long-term statistical research.
 
 ## Performance
 
-目標は200〜500個体、5,000〜20,000 active voxels、60 FPS。デフォルト240個体・約8,600 voxelsで実機表示を確認。FPSは描画フレーム頻度であり、GPU timestamp queryによるkernel計測ではありません。実測結果と検証seedは `VALIDATION.md` に記録します。
+The colony target is 200–500 organisms, 5,000–20,000 active voxels, and 60 FPS. The 240-organism configuration has been observed on hardware. Display FPS measures rendering frequency, not kernel timing through GPU timestamp queries. See `VALIDATION.md` for measured runs and seeds.
 
-拘束計算はO(active voxels × 26 × iterations)、field更新はO(16,384)。衝突は27セル近傍のlinked listを参照し、各セル最大96候補で打ち切ります。局所過密時には衝突候補を省略する近似なので、全Voxel対のO(N²)走査は行いませんが、高密度時の正確性は制限されます。
+Colony constraint work is O(active voxels × 26 × iterations); field updates are O(16,384). Collision searches 27 neighboring linked lists with a limit of 96 candidates per cell. This avoids an all-pairs O(N²) scan but omits candidates in crowded cells, limiting dense-contact accuracy.
 
 ## Limitations
 
-- compliant Jacobi PBD、球状近接反発、軸方向cube表示の近似。完全XPBD、FEM、体積保存、自己衝突、損傷・破断は未実装。
-- nearest-cell samplingの境界不連続。連続場・trilinear samplingへの交換余地あり。
-- 環境改変には専用energy costがなく、資源は保存量ではありません。
-- 能動的なfield領域同士の繁殖はなく、改変・変異・拡散・空間的残存がPhysics evolution。
-- maximum capacityに到達すると繁殖が停止。長時間の種分化・open-ended evolutionを保証しません。
-- seedは初期ゲノム・初期場・CPU変異・GPU hashを再現します。GPU float、parallel collision accumulationの順序、ハードウェア差により軌道のbitwise一致は保証しません。
-- セル密度の高い場所ではcollision capが効きます。50,000〜100,000 Voxel域の性能は別途検証が必要です。
+- Compliant Jacobi PBD and spherical proximity repulsion are approximations. Full XPBD, FEM, exact volume preservation, self-collision, damage, and fracture are not implemented.
+- Nearest-cell sampling has boundary discontinuities; trilinear sampling is a possible extension.
+- Environmental modification has no dedicated energy cost, and resources are not conserved.
+- Physical regions do not reproduce; physical evolution means modification, mutation, diffusion, and spatial persistence.
+- Reproduction stops at capacity. Long-term speciation and open-ended evolution are not guaranteed.
+- Seeds reproduce initial genomes, fields, CPU mutation, and GPU hashes. Floating-point behavior, parallel collision order, and hardware differences prevent guaranteed bitwise trajectories.
+- Performance at 50,000–100,000 voxels requires separate validation.
 
 ## Future Work
 
-XPBD multiplier、volume/shear constraints、GPU field reductions、resource diffusion、field modification cost、非同期staging ring、GPU compaction、複数seed統計、系統樹・genome clustering、CPPN/NCA morphology generator、成長・修復・fission/fusion、predation・symbiosis、sexual reproduction。
+XPBD multipliers, volume/shear constraints, GPU field reductions, resource diffusion, field-modification costs, asynchronous staging rings, GPU compaction, multi-seed statistics, lineage trees, genome clustering, CPPN/NCA morphology, growth, repair, fission/fusion, predation, symbiosis, and sexual reproduction.
 
-`CreatureManager`（個体管理）、`MorphologyGenerator`（発生）、`VoxelPhysics`（Compute kernel）、`Simulation`（step・buffer寿命）、`PhysicsField`（初期場）、`Metrics`（観測）、`Renderer`を分離してあります。
+Modules separate organism management (`CreatureManager`), development (`MorphologyGenerator`), compute kernels (`VoxelPhysics`), stepping and buffer lifetimes (`Simulation`), initial fields (`PhysicsField`), observation (`Metrics`), and rendering (`Renderer`).
 
-## Technical references
+## Technical References
 
 - [WebGPU specification](https://www.w3.org/TR/webgpu/)
 - [WGSL specification and alignment rules](https://www.w3.org/TR/WGSL/)
 - [Three.js WebGPU renderer documentation](https://threejs.org/docs/pages/WebGPURenderer.html)
 
-これらはAPIとメモリ設計の参照であり、このモデルの科学的妥当性の実証ではありません。
+These inform API and memory design; they are not evidence for this model’s scientific validity.
 
-## 変形する地面
+## Deformable Ground
 
-`Soft ground` は初期ON。`Ground stiffness` を下げると沈みやすくなります。地面は65 × 65頂点、64 × 64 quad / 8,192 triangles、間隔0.625の連続したheightfieldです。`Inspect organism`でも地面を表示します。初期状態では断面ヒートマップをOFFにし、凹凸と陰影を観察できます。
+**Soft ground** starts enabled. Lower **Ground stiffness** produces deeper depressions. The heightfield has 65 × 65 vertices, 64 × 64 quads, 8,192 triangles, and spacing 0.625. It remains visible during inspection. Field slices start hidden so surface shape and lighting are visible.
 
-GPUで接触付近のVoxel質量・下向き重力から近似荷重を求め、4近傍の地面頂点へ固定小数点atomicで分配します。地面は過減衰の弾性基盤モデルです。`heightRate = (3 × neighborLaplacian − stiffness × height − load) / damping`。stiffnessは操作値 × (1 + local repulsion × 0.3)、dampingは3 + local viscosity × 12。空間の重力・粘性・反発特性が変わると、地面の変形にも反映されます。地面自体に独立した遺伝子を追加したものではありません。
+The GPU approximates contact loads from nearby voxel mass and downward gravity, distributing them to four ground vertices through fixed-point atomics. The ground is an overdamped elastic foundation:
 
-高さと速度はGPUに保持し、同じ三角形補間を描画、Voxel接触、栄養摂取高度に使います。接触法線に沿った位置補正と、地面の鉛直速度に対する相対移動から摩擦を計算します。栄養の高さ減衰は絶対高度ではなく地表からの高さを使い、沈み込んだだけで摂取量が増える問題を避けます。地面のON/OFFは生物を瞬間的に押し上げず、速度制限内で平面へ戻します。完全な固定地面の比較はOFFにしてResetしてください。
+```text
+heightRate = (3 × neighborLaplacian − stiffness × height − load) / damping
+stiffness = controlValue × (1 + localRepulsion × 0.3)
+damping = 3 + localViscosity × 12
+```
 
-これは荷重を近似する視覚・接触モデルで、保存的な土壌力学やFEMではありません。接触インパルス全体の厳密な反作用、塑性変形、掘削、横方向の地面移動はありません。境界は固定、深さは1.2、変形速度は0.6 world units/sが上限です。Voxel中心のクリアランスを保証する近似接触であり、描画用の生物skinには局所的な地面との交差が起こり得ます。地面の変形は足場を変えるため、生態の軌道も以前とは変わります。
+Changing local gravity, viscosity, and repulsion changes the ground response. The ground has no separate genome.
 
-`Test ground response` は別の診断worldで同一seed・同一bodyを使い、軟／硬、高／低粘性、接触と平面対照を比較します。12秒の荷重後にbodyを取り除き、2秒の復元を測定します。従来の`Run 4 success tests`は地面OFFを明示し、元の固定床条件を維持します。数値結果はUIとJSON exportから確認できます。
+Height and velocity remain on the GPU. Rendering, voxel contact, and nutrient height attenuation use the same triangle interpolation. Contact correction follows the surface normal; friction uses motion relative to the ground’s vertical velocity. Nutrient attenuation uses height above the surface so sinking alone does not increase uptake. Disabling soft ground returns it gradually to a plane within the speed limit. For a strictly flat control, disable it and Reset.
 
+This is an approximate visual/contact model, not conservative soil mechanics or FEM. It does not reproduce full contact reaction impulses, plasticity, excavation, or lateral soil motion. Boundaries are fixed; depth is limited to 1.2 and vertical speed to 0.6 world units per second. Contact constrains voxel centers, but visual skin may locally intersect the ground. Changing the supporting surface also changes ecological trajectories.
 
-## Four giants — 大型生物の観察
+**Test ground response** uses separate diagnostic worlds with the same seed and body. It compares stiffness, viscosity, contact, and a flat control. The body loads the ground for 12 seconds, then is removed for two seconds of recovery measurement. Results are available in the UI and JSON export.
 
-初期表示は4体の大型生物です。Ribbon（細長い32 voxel）、Crawler（多脚）、Star（放射状）、Roller（球状）を直接エンコードした接続済みgenomeから生成します。合計264 physical voxels、各Voxelの間隔0.87（通常の3倍）。密度・質量は観察用のモデル値のままで、相似則に従う実材料の拡大模型ではありません。GPU capacityはこのモードのみ4 × 512で確保し、active rangeだけ処理します。
+## Four Giants
 
-身体を支える124近傍以内の距離拘束と40 solver iterationsを使用。筋肉は位相を揃えた進行波、左右交互の伸縮、放射状の上下屈曲、周方向に移る伸縮を与えます。接地のgripも収縮位相で変わります。身体の平行移動や回転をキーアニメーションで直接指定していません。異方的な伸縮に補償成分を加えていますが、厳密な体積保存ではありません。自由な折り畳みとskinの自己交差は引き続き近似モデルの限界です。
+Four authored connected genomes generate Ribbon (32 voxels), Crawler (88), Star (56), and Roller (88). The total is 264 physical voxels, with spacing 0.87—three times the colony spacing. Mass and density remain model values; this is not a physically scaled material specimen. This mode reserves 4 × 512 voxel capacity and processes only active voxels.
 
-Ribbon / Crawler / Star / Rollerボタンで個体を拡大追尾、World viewで全体に戻ります。色は個体ごとに固定。地面も身体の大きさに対応した接触半径を使用します。Four giantsではエネルギーを毎step補給し、出生・死亡を停止します。形状と収縮パターンは設計したもので、進化が獲得した行動とは区別してください。局所物理の進化は初期OFFですが、操作でONにできます。World mode切り替えはworldを再初期化します。
+Up to 124 neighboring constraints and 40 solver iterations support the bodies. Coordinated muscles produce traveling waves, alternating leg extensions, radial flexion, and circumferential contraction. Contact grip also follows muscle phase. Translation and rotation are not directly keyframed. Compensating stretch components approximate volume retention, without guaranteeing conservation. Folding and skin self-intersection remain possible.
 
-`Test four-body motion`では筋肉ON/OFFそれぞれ16 simulated secondsを実行し、最初の4秒を除いた12秒を比較します。0.5秒ごとの重心水平移動の累積（正味変位ではない）、重心を除いたVoxel移動RMSの最大値（回転を含む）、標識2点を結ぶ軸の方向変化を記録します。RollerにはXY平面への投影軸の正味回転が90度超という追加判定があります。この指標は変形体のmarker角度で、厳密な剛体姿勢ではありません。変形地面に対するVoxel中心の最小クリアランスも検査します。
+Use **Ribbon**, **Crawler**, **Star**, or **Roller** to follow a body, and **World view** for the full scene. Each body has a distinct color. Ground contact uses the enlarged voxel radius. Energy is replenished every step, and births and deaths are disabled for continuous observation. These are authored bodies and gaits, not evolved behaviors. Field evolution starts disabled but can be enabled. Switching World mode reinitializes the world.
 
-### Wireframe表示
-
-Body renderingのWireframeで、生物の表面三角形の辺だけを表示できます。重複辺はまとめて一度描き、面は描きません。裏側の線も透けて見えます。Smooth meshと同じGPU変形頂点を参照するため、表示を切り替えても身体・物理状態は継続します。地面表示はそのまま残ります。
+**Test four-body motion** runs muscles ON/OFF for 16 seconds each and compares the final 12 seconds. It measures cumulative horizontal center-of-mass travel at 0.5-second intervals (not net displacement), maximum centered voxel-motion RMS (including rotation), and changes in a two-marker axis. Roller additionally requires more than 90 degrees of net XY-projected marker rotation. This is a deforming-body marker measure, not an exact rigid-body orientation. Minimum voxel-center clearance above the ground is also checked.

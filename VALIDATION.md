@@ -2,41 +2,41 @@
 
 2026-09-10 · seed 2048 · local Codex in-app browser · Apple M5 Max (40 GPU cores, Metal supported).
 
-最終実装のWGSLを実機で実行。CPU物理へのフォールバックなし。以下は1 seedでの工学的検証結果であり、一般的な種分化や長期の適応進化を立証するものではありません。
+The implementation's WGSL was executed on hardware without a CPU-physics fallback. These are engineering checks for one seed, not proof of general speciation or long-term adaptive evolution.
 
 ## Automated checks
 
-- TypeScript `tsc --noEmit`：成功。
-- Oxlint（src / app / tests）：成功。
-- CPU tests：5 / 5成功。初期条件のseed再現性、1,000回の接続性付き変異、拘束の相互接続、出生時energy transferと死亡slot再利用、相関の退化ケース。
-- Vite / Vinext production build：成功。
-- GPU success tests：4 / 4成功。すべて有限値。
+- TypeScript `tsc --noEmit`: passed.
+- Oxlint (src / app / tests): passed.
+- CPU tests: 5 / 5 passed. Coverage includes seeded initial conditions, 1,000 connectivity-preserving mutations, reciprocal constraints, birth energy transfer and death-slot reuse, and degenerate correlations.
+- Vite / Vinext production build: passed.
+- GPU success tests: 4 / 4 passed. All values were finite.
 
 ## 1. Muscle-only locomotion
 
-同一単体genome、水平重力0、gravity大きさ7。4秒settling後、14秒を測定。移動量はworld units。
+One matched genome, zero horizontal gravity, and gravity magnitude 7. Measurements cover 14 seconds after four seconds of settling. Displacements are in world units.
 
 |Condition|Horizontal COM displacement|Relative-shape RMS change|
 |---|---:|---:|
 |Muscles OFF|0.000147305|0.000229094|
 |Muscles ON|0.080795740|0.122691382|
 
-このseedでは筋収縮による接触運動を確認。歩容・移動関数は与えていません。
+For this seed, muscle contraction produced motion through contact. No gait or movement function was supplied.
 
 ## 2. Spatial local-law response
 
-同一genomeを診断用の同じ空間fieldのx = −10 / +10へ配置。controller係数を0にして感覚入力による差を除外。
+The same genome was placed at x = −10 / +10 within one diagnostic spatial field. Controller coefficients were zeroed to exclude sensory-input differences.
 
 |Location|Body-sampled gravity|Horizontal displacement|Shape RMS change|
 |---|---:|---:|---:|
 |x = −10|2.000000|0.077434205|0.044257098|
 |x = +10|14.000001|0.270224036|0.200618691|
 
-通常実験の初期場にはこの診断用zoneを使用しません。
+These diagnostic zones are not used in normal initial fields.
 
 ## 3. Niche formation and influence ablation
 
-32 founders、120 simulated seconds。Physics diversityはREADMEの正規化空間分散。
+32 founders, 120 simulated seconds. Physics diversity is the normalized spatial variance defined in the README.
 
 |Condition|Physics diversity at 120 s|
 |---|---:|
@@ -44,11 +44,11 @@
 |Evolving laws, influence = 0|0.000009935346|
 |Evolving laws, body influence = 0.3|0.001576846267|
 
-生物作用ありは作用なしの約158.7倍。微小なlaw mutationだけでは同程度の空間構造になりません。
+Body influence produced approximately 158.7 times the diversity of the no-influence control. Small law mutations alone did not produce comparable spatial structure in this run.
 
 ## 4. Matched-seed ecological divergence
 
-32 founders、initial body target 32、maximum 80 creatures、8 constraint iterations、metabolism .02、muscle cost .025、reproduction threshold 110。元の初期genome分布一致をtest内で検査。
+32 founders, initial body target 32, maximum 80 organisms, eight constraint iterations, metabolism 0.02, muscle cost 0.025, and reproduction threshold 110. The test verifies matching initial genome distributions.
 
 |Metric at 120 s|Fixed physics|Coevolution|
 |---|---:|---:|
@@ -66,21 +66,21 @@
 |Drag variance|0.000033296|0.011306842|
 |Viscosity variance|0.000033582|0.022834247|
 
-body size histogram、material distributionも異なることをtest条件で検査しています。詳細な数値の抜粋は `validation-evidence.json`、全時系列はアプリで再実行してExport validation JSONから取得できます。
+The test also checks differences in body-size histograms and material distributions. Numerical excerpts are in `validation-evidence.json`; rerun the application tests and use Export validation JSON for complete time series.
 
 ## UI and performance observations
 
-240 creatures / 8,616 active voxels、32 × 16 × 32 field、6 solver iterations、実時間1倍で動作。表示FPSは118〜120を観測。これはApple M5 Max上での描画フレーム頻度で、GPU timestampによるbenchmarkではなく、他GPUでの60 FPS保証でもありません。
+Observed with 240 organisms / 8,616 active voxels, a 32 × 16 × 32 field, six solver iterations, and target speed 1×. Displayed FPS was 118–120. This is rendering frequency on the Apple M5 Max, not a GPU timestamp benchmark or a guarantee of 60 FPS on other GPUs.
 
-Pause / Resume、同一seed Reset（240 creatures / 8,616 voxels / 85 mean energy / t=0へ復帰）、Fixed preset、Physics evolution OFF、Gravity mode、gravity arrows、XY field sliceをUI操作で確認。Material viewのcube bodiesとfield sliceを目視確認。エラーは画面に表示し、NaN観測時はsimulationを停止します。
+UI checks covered Pause/Resume, same-seed Reset (returning to 240 organisms, 8,616 voxels, mean energy 85, and t=0), the Fixed preset, Physics evolution OFF, Gravity mode, gravity arrows, and an XY field slice. Cube bodies in Material view and field slices were inspected visually. Errors are shown on screen, and non-finite observations stop the simulation.
 
 ## Interpretation and remaining validation
 
-この実行では、生物の局所環境作用が物理場に構造を作り、そこから運動・energy収支・出生死亡・身体分布が異なる経路を辿る閉ループを測定できました。
+This run measured a loop in which organism influence structured the local field, followed by different motion, energy balances, lifecycle events, and body distributions.
 
-短時間・単一seedでのtrajectory分岐は、特定形態が特定nicheに普遍的に適応したことや、種分化を証明しません。複数seed、長時間、系統別reproductive success、より詳細なcontroller / environment ablationが次の研究課題です。
+Short, single-seed trajectory divergence does not prove universal adaptation of a morphology to a niche or speciation. Further work requires multiple seeds, longer runs, lineage-specific reproductive success, and more detailed controller/environment ablations.
 
-GPU上のparallel衝突集計順序に由来する小差があります。再実行でfield統計の末尾や軌道が変わっても、bitwise determinismを保証していない設計上の制約です。
+Parallel GPU collision accumulation introduces small differences. Changes in trailing field statistics or trajectories across runs are consistent with the absence of a bitwise-determinism guarantee.
 
 ## Continuous surface rendering update
 
@@ -96,41 +96,41 @@ GPU上のparallel衝突集計順序に由来する小差があります。再実
 
 ## Deformable ground update — 2026-09-10
 
-新しい地面機能のGPU比較試験は4 / 4成功（seed 2048）。同一個体、筋活動OFF、環境進化OFF。各条件12 simulated secondsの荷重後、個体を除去し2秒の復元を測定。診断worldはlive worldと独立しています。
+The ground GPU comparison passed 4 / 4 checks with seed 2048. The same organism was used with muscles and field evolution disabled. Each condition applied load for 12 simulated seconds, then removed the body for two seconds of recovery. Diagnostic worlds were separate from the live world.
 
-| 条件 | 荷重時の最大深さ | 除荷2秒後 | 残存率 |
+| Condition | Maximum loaded depth | Depth after 2 s unloaded | Remaining fraction |
 |---|---:|---:|---:|
-| 軟：stiffness 4、viscosity 0.3 | 1.085063 | 0.115066 | 10.60% |
-| 硬：stiffness 32、viscosity 0.3 | 0.201854 | 0.0000000523 | 0.000026% |
-| 高粘性：stiffness 4、viscosity 3 | 0.834111 | 0.511507 | 61.32% |
-| 地面変形OFF | 0 | 0 | — |
+| Soft: stiffness 4, viscosity 0.3 | 1.085063 | 0.115066 | 10.60% |
+| Hard: stiffness 32, viscosity 0.3 | 0.201854 | 0.0000000523 | 0.000026% |
+| High viscosity: stiffness 4, viscosity 3 | 0.834111 | 0.511507 | 61.32% |
+| Ground deformation OFF | 0 | 0 | — |
 
-全条件finite。Voxel中心の地表からの最小クリアランスは0.1449996以上（目標0.145）。軟地面の個体重心Yは−0.498355、固定床は0.376319となり、表示だけでなく接触が変化することを確認。異なる初期くぼみからの復元であるため、粘性による残存率はこのfixtureでの比較であり材料定数の厳密測定ではありません。数値は `ground-validation-evidence.json` に保存。
+All conditions remained finite. Minimum voxel-center clearance was at least 0.1449996 against a target of 0.145. Body center Y was −0.498355 on soft ground and 0.376319 on the flat control, confirming a contact change rather than a display-only effect. Because recovery starts from different depressions, remaining fractions compare this fixture rather than precisely measuring material constants. Results are saved in `ground-validation-evidence.json`.
 
-地面は近似荷重を受ける過減衰モデルで、厳密な運動量・エネルギー保存や土壌材料の再現を保証しません。地面の描画三角形と接触高さは同じ補間を使用しますが、生物の装飾skin全体の非交差を証明する検証ではありません。長期の適応進化に関する旧結果を、新しい地面の科学的検証として流用していません。
+The ground is an overdamped approximate-load model, without guaranteed momentum/energy conservation or faithful soil-material behavior. Rendering and contact use the same triangle interpolation, but these checks do not prove that the entire visual organism skin never intersects the ground. Earlier evolutionary results are not reused as scientific validation of the new ground model.
 
-回帰確認：地面OFFを明示した既存GPU 4試験も4 / 4成功。筋活動ONの水平移動0.06866537、OFF 0.00013537。局所物理応答、環境構造化、matched-seed生態軌道の分岐もpass。今回の固定床再実行値は上記の過去実行値を置き換えず、別実行として記録します。CPUテスト7 / 7、TypeScript、scoped lint、production build成功。ブラウザにGPUエラー表示なし。
+Regression checks: the original GPU suite with ground deformation explicitly disabled passed 4 / 4. Horizontal displacement was 0.06866537 with muscles ON and 0.00013537 with muscles OFF. Local-law response, environmental structuring, and matched-seed ecological divergence also passed. These flat-floor rerun values are recorded separately rather than replacing earlier observations. CPU tests passed 7 / 7; TypeScript, scoped lint, and production build passed. No GPU error alerts appeared.
 
 
 ## Four giants update — 2026-09-10
 
-seed 2048、4体264 active voxels、voxel spacing 0.87、40拘束反復。GPU上で筋肉ON/OFFを各16秒実行し、最初の4秒を除いた12秒の動きを比較しました。
+Seed 2048, four bodies with 264 active voxels, voxel spacing 0.87, and 40 constraint iterations. Muscles ON/OFF were each run for 16 simulated seconds; the final 12 seconds were compared after excluding four seconds of settling.
 
-| 身体 | 筋肉ONの水平経路長 | 筋肉OFFの水平経路長 | 最大重心除去Voxel移動RMS |
+| Body | Horizontal path, muscles ON | Horizontal path, muscles OFF | Maximum centered voxel-motion RMS |
 |---|---:|---:|---:|
 | Ribbon | 1.380583 | 0.00000525 | 1.137132 |
 | Crawler | 1.646815 | 0.00000703 | 1.441738 |
 | Star | 0.320945 | 0.00000251 | 0.727776 |
 | Roller | 2.081847 | 0.00088231 | 1.380266 |
 
-水平経路長は0.5秒間隔の重心移動を合計したものです。正味の移動距離ではありません。RMSには身体の回転も含み、純粋なひずみ量ではありません。Rollerの2点標識軸のXY投影の正味回転は3.032969 rad（約174度）。変形体の標識計測であり、厳密な剛体回転角ではありません。全体のVoxel中心の地面からの最小距離は0.434999921、目標0.435と整合。GPU結果に非有限値なし。数値を `showcase-validation-evidence.json` に保存。
+Horizontal path sums center-of-mass travel at 0.5-second intervals; it is not net displacement. RMS includes body rotation and is not pure strain. Roller's two-marker axis accumulated 3.032969 rad (approximately 174 degrees) of net XY-projected rotation. This deforming-body marker measurement is not an exact rigid-body angle. Minimum voxel-center ground clearance was 0.434999921, consistent with the 0.435 target. GPU results remained finite. Values are saved in `showcase-validation-evidence.json`.
 
-新規CPU試験は4体の遺伝子接続性、形状の相違、拡張拘束の個体内参照、拡大skinの閉じた面を検査。既存と合わせ8 / 8成功。TypeScript、scoped lint、production build成功。従来の240体モードへの切り替えで240個体 / 8,616 voxels、GPUエラー表示なしを確認。
+The new CPU test covers genome connectivity, distinct body shapes, within-body references for extended constraints, and closed enlarged skins. The combined suite passed 8 / 8. TypeScript, scoped lint, and production build passed. Switching back to colony mode restored 240 organisms / 8,616 voxels without GPU error alerts.
 
-これは設計済み形状・筋位相・接地gripの観察モードです。エネルギー補給と出生死亡停止を明示しており、共進化による歩行獲得や生存適応の証拠には使用しません。
+This observation mode uses authored shapes, muscle phases, and contact grip. Energy replenishment and disabled births/deaths are explicitly documented. Its results are not evidence of evolved locomotion or survival adaptation.
 
-最終版のFour giants試験は正味回転条件を含め4 / 4成功。既存共進化GPU試験も再実行で4 / 4成功。最終全景で4体264 voxels、表示120 FPS、GPUエラー表示なしを確認（描画FPSでありGPU timestamp benchmarkではありません）。
+The final Four giants suite passed 4 / 4, including the net-rotation requirement. The original coevolution GPU suite also passed 4 / 4 on rerun. The final overview showed four bodies, 264 voxels, 120 displayed FPS, and no GPU error alerts. Display FPS is not a GPU timestamp benchmark.
 
 ## Wireframe update — 2026-09-10
 
-4体モードで線だけのMesh表示、変形追従、Smooth mesh → Wireframeの往復切り替えを実機確認。4体264 voxelsを保持、GPUエラー表示なし。TypeScript、scoped lint、production build成功。物理shader・進化ルールへの変更なし。
+Hardware checks confirmed line-only mesh rendering, deformation tracking, and Smooth mesh → Wireframe switching in four-body mode. The population remained four bodies / 264 voxels, with no GPU error alerts. TypeScript, scoped lint, and production build passed. Physics shaders and evolutionary rules were unchanged.
