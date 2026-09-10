@@ -130,3 +130,7 @@ seed 2048、4体264 active voxels、voxel spacing 0.87、40拘束反復。GPU上
 これは設計済み形状・筋位相・接地gripの観察モードです。エネルギー補給と出生死亡停止を明示しており、共進化による歩行獲得や生存適応の証拠には使用しません。
 
 最終版のFour giants試験は正味回転条件を含め4 / 4成功。既存共進化GPU試験も再実行で4 / 4成功。最終全景で4体264 voxels、表示120 FPS、GPUエラー表示なしを確認（描画FPSでありGPU timestamp benchmarkではありません）。
+
+## Wireframe update — 2026-09-10
+
+4体モードで線だけのMesh表示、変形追従、Smooth mesh → Wireframeの往復切り替えを実機確認。4体264 voxelsを保持、GPUエラー表示なし。TypeScript、scoped lint、production build成功。物理shader・進化ルールへの変更なし。

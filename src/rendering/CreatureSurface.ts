@@ -9,6 +9,8 @@ export class CreatureSurface {
   deformed: GPUBuffer;
   normalLinks: GPUBuffer;
   indices: GPUBuffer;
+  edges: GPUBuffer;
+  edgeCount = 0;
   vertexCount = 0;
   indexCount = 0;
   revision = '';
@@ -19,6 +21,12 @@ export class CreatureSurface {
     this.vertices = buffer(device, 'Surface skin metadata', 96);
     this.deformed = buffer(device, 'Deformed surface', 32);
     this.normalLinks = buffer(device, 'Surface normal adjacency', 16);
+    this.edges = buffer(
+      device,
+      'Surface edges',
+      16,
+      GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    );
     this.indices = buffer(
       device,
       'Surface triangles',
@@ -93,8 +101,30 @@ export class CreatureSurface {
       this.deformed,
       this.normalLinks,
       this.indices,
+      this.edges,
     ])
       b.destroy();
+    const edgeSet = new Set<string>();
+    const edgeList: number[] = [];
+    for (let i = 0; i < indexCount; i += 3)
+      for (let j = 0; j < 3; j++) {
+        const a = indices[i + j],
+          b = indices[i + ((j + 1) % 3)],
+          key = a < b ? `${a}:${b}` : `${b}:${a}`;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          edgeList.push(a, b);
+        }
+      }
+    this.edgeCount = edgeList.length;
+    this.edges = buffer(
+      this.device,
+      'Surface edges',
+      Math.max(16, edgeList.length * 4),
+      GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    );
+    if (edgeList.length)
+      this.device.queue.writeBuffer(this.edges, 0, new Uint32Array(edgeList));
     this.vertexCount = vertexCount;
     this.indexCount = indexCount;
     this.vertices = buffer(
@@ -151,6 +181,7 @@ export class CreatureSurface {
       this.deformed,
       this.normalLinks,
       this.indices,
+      this.edges,
     ])
       b.destroy();
     this.cache.clear();

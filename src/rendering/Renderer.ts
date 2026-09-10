@@ -126,13 +126,18 @@ export class Renderer {
     const pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [layout],
     });
-    for (const name of ['voxel', 'mesh', 'ground', 'slice', 'arrow'])
+    for (const name of ['voxel', 'mesh', 'wire', 'ground', 'slice', 'arrow'])
       this.pipelines[name] = await this.device.createRenderPipelineAsync({
         label: name,
         layout: pipelineLayout,
         vertex: {
           module: shaderModule,
-          entryPoint: name === 'voxel' ? 'voxelVs' : name + 'Vs',
+          entryPoint:
+            name === 'wire'
+              ? 'meshVs'
+              : name === 'voxel'
+                ? 'voxelVs'
+                : name + 'Vs',
           buffers:
             name === 'voxel'
               ? [
@@ -148,7 +153,7 @@ export class Renderer {
         },
         fragment: {
           module: shaderModule,
-          entryPoint: 'fs',
+          entryPoint: name === 'wire' ? 'wireFs' : 'fs',
           targets: [
             {
               format: this.format,
@@ -163,12 +168,13 @@ export class Renderer {
           ],
         },
         primitive: {
-          topology: name === 'arrow' ? 'line-list' : 'triangle-list',
+          topology:
+            name === 'arrow' || name === 'wire' ? 'line-list' : 'triangle-list',
           cullMode: 'none',
         },
         depthStencil: {
           format: 'depth24plus',
-          depthWriteEnabled: name !== 'slice',
+          depthWriteEnabled: name !== 'slice' && name !== 'wire',
           depthCompare: 'less-equal',
         },
       });
@@ -232,7 +238,7 @@ export class Renderer {
     ]);
     this.device.queue.writeBuffer(this.uniform, 0, data);
     const e = this.device.createCommandEncoder();
-    if (c.surfaceMode === 0 && c.showVoxels)
+    if (c.surfaceMode !== 1 && c.showVoxels)
       this.surface.deform(e, s.voxelIndex);
     const pass = e.beginRenderPass({
       colorAttachments: [
@@ -254,10 +260,16 @@ export class Renderer {
     pass.setPipeline(this.pipelines.ground);
     pass.draw(64 * 64 * 6);
     if (c.showVoxels) {
-      if (c.surfaceMode === 0) {
-        pass.setPipeline(this.pipelines.mesh);
-        pass.setIndexBuffer(this.surface.indices, 'uint32');
-        pass.drawIndexed(this.surface.indexCount);
+      if (c.surfaceMode !== 1) {
+        const wire = c.surfaceMode === 2;
+        pass.setPipeline(wire ? this.pipelines.wire : this.pipelines.mesh);
+        pass.setIndexBuffer(
+          wire ? this.surface.edges : this.surface.indices,
+          'uint32',
+        );
+        pass.drawIndexed(
+          wire ? this.surface.edgeCount : this.surface.indexCount,
+        );
       } else {
         pass.setPipeline(this.pipelines.voxel);
         pass.setVertexBuffer(0, this.vertices);

@@ -484,9 +484,14 @@ export default function Laboratory() {
           <p className="eyebrow">OBSERVATION</p>
           <Choice
             label="Body rendering"
-            value={config.surfaceMode === 0 ? 'Smooth mesh' : 'Voxels'}
-            items={['Smooth mesh', 'Voxels']}
-            onChange={(v) => update('surfaceMode', v === 'Smooth mesh' ? 0 : 1)}
+            value={['Smooth mesh', 'Voxels', 'Wireframe'][config.surfaceMode]}
+            items={['Smooth mesh', 'Voxels', 'Wireframe']}
+            onChange={(v) =>
+              update(
+                'surfaceMode',
+                ['Smooth mesh', 'Voxels', 'Wireframe'].indexOf(v),
+              )
+            }
           />
           <Choice
             label="Visualization"
@@ -505,7 +510,7 @@ export default function Laboratory() {
             onChange={(v) => update('showField', v)}
           />
           <Toggle
-            label={config.surfaceMode === 0 ? 'Sensor colors' : 'Sensor voxels'}
+            label={config.surfaceMode !== 1 ? 'Sensor colors' : 'Sensor voxels'}
             value={config.showSensors}
             onChange={(v) => update('showSensors', v)}
           />
@@ -639,9 +644,11 @@ export default function Laboratory() {
           <footer>
             Drag to orbit · Scroll to zoom
             <span>
-              {config.surfaceMode === 0
-                ? 'GPU-deformed continuous mesh'
-                : 'GPU compute + instanced cubes'}
+              {config.surfaceMode === 2
+                ? 'GPU-deformed wireframe'
+                : config.surfaceMode === 0
+                  ? 'GPU-deformed continuous mesh'
+                  : 'GPU compute + instanced cubes'}
             </span>
           </footer>
         </section>

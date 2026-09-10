@@ -40,3 +40,5 @@ fn plane(v:u32,y:f32)->vec3f{let corners=array<vec2f,6>(vec2f(-20,-20),vec2f(20,
  if(i.kind==1u){color*=.35+.65*max(0.,dot(normalize(i.normal),normalize(vec3f(-.6,.7,.3))));color+=vec3f(.04,.09,.085)*clamp(-i.world.y,0.,1.);let line=min(abs(fract(i.world.x)-.5),abs(fract(i.world.z)-.5));let edge=1.-smoothstep(.005,.045,line);color+=vec3f(.022,.04,.05)*edge;let major=min(abs(fract(i.world.x/5.)-.5),abs(fract(i.world.z/5.)-.5));color+=vec3f(.02,.035,.042)*(1.-smoothstep(.002,.01,major));}
  if(i.kind==2u){color=ramp(fieldValue(field[idx(i.world)]));alpha=.38;let c=fract((i.world.xz+20.)/1.25);let edge=min(min(c.x,c.y),min(1.-c.x,1.-c.y));color*=.8+.2*smoothstep(0.,.035,edge);}
  let fog=1.-exp(-length(camera.eye.xyz-i.world)*.006);color=mix(color,vec3f(.055,.102,.13),fog);return vec4f(color,alpha);}
+
+@fragment fn wireFs(i:Out)->@location(0) vec4f {return vec4f(i.color*.85+vec3f(.15),.55);}
