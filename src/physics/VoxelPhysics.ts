@@ -1,3 +1,4 @@
+import groundSample from '../shaders/terrainSample.wgsl?raw';
 import common from '../shaders/common.wgsl?raw';
 import sensors from '../shaders/sensors.wgsl?raw';
 import actuator from '../shaders/actuator.wgsl?raw';
@@ -72,11 +73,12 @@ export class VoxelPhysics {
         ],
         [
           'collision',
-          collision,
+          collision + groundSample,
           [
             'uniform',
             'read-only-storage',
             'storage',
+            'read-only-storage',
             'read-only-storage',
             'read-only-storage',
             'read-only-storage',
@@ -85,12 +87,13 @@ export class VoxelPhysics {
         ],
         [
           'energy',
-          energy,
+          energy + groundSample,
           [
             'uniform',
             'storage',
             'read-only-storage',
             'storage',
+            'read-only-storage',
             'read-only-storage',
             'read-only-storage',
           ],

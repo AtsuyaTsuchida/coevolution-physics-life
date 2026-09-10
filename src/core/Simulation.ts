@@ -1,3 +1,4 @@
+import { DeformableGround } from '../environment/DeformableGround';
 import { buffer } from './GPUContext';
 import { DT, MAX_BODY, FIELD_CELLS, type Config } from './Config';
 import { CreatureManager } from '../creatures/CreatureManager';
@@ -5,6 +6,7 @@ import { initialField } from '../environment/PhysicsField';
 import { VoxelPhysics } from '../physics/VoxelPhysics';
 import { measure, type Metric } from '../metrics/Metrics';
 export class Simulation {
+  ground: DeformableGround;
   manager: CreatureManager;
   physics: VoxelPhysics;
   state: GPUBuffer[];
@@ -28,6 +30,8 @@ export class Simulation {
   destroyed = false;
   lastSnapshot?: Float32Array;
   lastField?: Float32Array;
+  lastGround?: Float32Array;
+  groundDepth = 0;
   readonly initialConfig: Config;
   configChanges: {
     simulationTime: number;
@@ -42,6 +46,7 @@ export class Simulation {
     public device: GPUDevice,
     public config: Config,
   ) {
+    this.ground = new DeformableGround(device);
     this.initialConfig = { ...config };
     this.manager = new CreatureManager(config);
     this.physics = new VoxelPhysics(device);
@@ -75,12 +80,13 @@ export class Simulation {
     this.readback = buffer(
       device,
       'Ecology readback',
-      config.maxCount * 128 + FIELD_CELLS * 48,
+      config.maxCount * 128 + FIELD_CELLS * 48 + 4225 * 16,
       GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     );
   }
   async initialize() {
     await this.physics.initialize();
+    await this.ground.initialize(this);
     const packed = this.manager.pack();
     this.device.queue.writeBuffer(this.meta, 0, packed.meta);
     this.device.queue.writeBuffer(this.adjacency, 0, packed.adjacency);
@@ -114,8 +120,25 @@ export class Simulation {
           constraints: [u, a, b, this.meta, this.adjacency, this.act],
           clearGrid: [u, a, this.heads, this.next],
           grid: [u, a, this.heads, this.next],
-          collision: [u, a, b, this.meta, world, this.heads, this.next],
-          energy: [u, a, this.meta, this.creatures, world, this.act],
+          collision: [
+            u,
+            a,
+            b,
+            this.meta,
+            world,
+            this.heads,
+            this.next,
+            this.ground.state,
+          ],
+          energy: [
+            u,
+            a,
+            this.meta,
+            this.creatures,
+            world,
+            this.act,
+            this.ground.state,
+          ],
           clearInfluence: [u, a, this.meta, this.creatures, this.deposits],
           influence: [u, a, this.meta, this.creatures, this.deposits],
           field: [u, world, this.field[1 - f], this.deposits],
@@ -148,8 +171,8 @@ export class Simulation {
       c.diffusion,
       +c.physicsEvolution,
       c.seed,
-      0,
-      0,
+      +c.deformGround,
+      c.groundStiffness,
       0,
     ]);
     this.device.queue.writeBuffer(this.uniform, 0, parameters);
@@ -164,6 +187,7 @@ export class Simulation {
     const nv = Math.ceil(this.manager.total / 128),
       nc = Math.ceil(c.maxCount / 64),
       nf = 128;
+    this.ground.step(e, this);
     run('sensors', nc);
     run('actuator', nv);
     run('forces', nv);
@@ -197,11 +221,26 @@ export class Simulation {
       bytes,
       FIELD_CELLS * 48,
     );
+    e.copyBufferToBuffer(
+      this.ground.state,
+      0,
+      this.readback,
+      bytes + FIELD_CELLS * 48,
+      4225 * 16,
+    );
     this.device.queue.submit([e.finish()]);
     await this.readback.mapAsync(GPUMapMode.READ);
     const mapped = this.readback.getMappedRange();
     const cs = new Float32Array(mapped.slice(0, bytes)),
-      fs = new Float32Array(mapped.slice(bytes));
+      fs = new Float32Array(mapped.slice(bytes, bytes + FIELD_CELLS * 48));
+    this.lastGround = new Float32Array(mapped.slice(bytes + FIELD_CELLS * 48));
+    this.groundDepth = 0;
+    for (let i = 0; i < this.lastGround.length; i += 4)
+      this.groundDepth = Math.max(this.groundDepth, -this.lastGround[i]);
+    if (!this.lastGround.every(Number.isFinite)) {
+      this.readback.unmap();
+      throw new Error('Non-finite ground state');
+    }
     this.readback.unmap();
     if (this.destroyed) return;
     this.lastSnapshot = cs;
@@ -276,6 +315,7 @@ export class Simulation {
   }
   dispose() {
     this.destroyed = true;
+    this.ground.dispose();
     for (const b of [
       ...this.state,
       ...this.field,

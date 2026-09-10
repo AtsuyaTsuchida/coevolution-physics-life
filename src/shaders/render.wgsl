@@ -11,6 +11,7 @@ struct SkinState {position:vec4f,pigment:vec4f}
 @group(0) @binding(4) var<storage,read> skin:array<SkinVertex>;
 @group(0) @binding(5) var<storage,read> skinState:array<SkinState>;
 @group(0) @binding(6) var<storage,read> normalLinks:array<u32>;
+@group(0) @binding(7) var<storage,read> terrain:array<vec4f>;
 struct Out {@builtin(position) clip:vec4f,@location(0) color:vec3f,@location(1) world:vec3f,@location(2) normal:vec3f,@location(3) @interpolate(flat) kind:u32}
 fn idx(p:vec3f)->u32{let c=clamp(vec3i(floor((p+vec3f(20,0,20))/1.25)),vec3i(0),vec3i(31,15,31));return u32(c.x+c.y*32+c.z*512);}
 fn ramp(t:f32)->vec3f{let x=clamp(t,0.,1.);return mix(mix(vec3f(.07,.25,.34),vec3f(.32,.73,.73),min(1.,x*2.)),vec3f(.95,.72,.4),max(0.,x*2.-1.));}
@@ -27,13 +28,13 @@ fn fieldValue(f:Field)->f32{let mode=u32(camera.visual.x);switch(mode){case 4u:{
  var o:Out;o.world=v.position.xyz;o.clip=camera.vp*vec4f(o.world,1);o.color=color;o.normal=select(vec3f(0,1,0),n/max(length(n),.000001),length(n)>.000001);o.kind=4u;if(camera.options.w>0.&&u32(camera.options.w)-1u!=s.info.x){o.clip=vec4f(2,2,2,1);}return o;
 }
 fn plane(v:u32,y:f32)->vec3f{let corners=array<vec2f,6>(vec2f(-20,-20),vec2f(20,-20),vec2f(-20,20),vec2f(-20,20),vec2f(20,-20),vec2f(20,20));return vec3f(corners[v].x,y,corners[v].y);}
-@vertex fn groundVs(@builtin(vertex_index) v:u32)->Out{var o:Out;o.world=plane(v,0.);o.clip=camera.vp*vec4f(o.world,1);o.normal=vec3f(0,1,0);o.color=vec3f(.045,.085,.105);o.kind=1u;return o;}
+@vertex fn groundVs(@builtin(vertex_index) v:u32)->Out{let offsets=array<vec2u,6>(vec2u(0,0),vec2u(0,1),vec2u(1,0),vec2u(1,0),vec2u(0,1),vec2u(1,1));let quad=v/6u;let c=vec2u(quad%64u,quad/64u)+offsets[v%6u];let k=c.x+c.y*65u;let p=vec2f(c)*.625-20.;let g=groundSample(p);var o:Out;o.world=vec3f(p.x,terrain[k].x,p.y);o.clip=camera.vp*vec4f(o.world,1);o.normal=normalize(vec3f(-g.y,1.,-g.z));o.color=vec3f(.13,.24,.27);o.kind=1u;return o;}
 @vertex fn sliceVs(@builtin(vertex_index) v:u32)->Out{var o:Out;var p=plane(v,.025+camera.visual.z*19.);let axis=u32(camera.visual.w);if(axis==0u){p=vec3f(-20.+camera.visual.z*40.,(p.x+20.)*.5,p.z);}if(axis==2u){p=vec3f(p.x,(p.z+20.)*.5,-20.+camera.visual.z*40.);}o.world=p;o.clip=camera.vp*vec4f(p,1);o.normal=vec3f(0,1,0);o.color=vec3f(0);o.kind=2u;return o;}
 @vertex fn arrowVs(@builtin(vertex_index) v:u32,@builtin(instance_index) i:u32)->Out{let step=u32(camera.options.z);let columns=(32u+step-1u)/step;let x=i%columns*step;let z=i/columns*step;let p=vec3f(-19.375+f32(x)*1.25,1.6+camera.visual.z*15.,-19.375+f32(z)*1.25);let g=field[idx(p)].gravityDrag.xyz;let end=p+normalize(g)*clamp(length(g)*.13,.4,1.8);var q=p;switch(v){case 1u,2u,4u:{q=end;}case 3u:{q=end-normalize(g)*.22+vec3f(.15,0,0);}case 5u:{q=end-normalize(g)*.22-vec3f(.15,0,0);}default:{}}
  var o:Out;o.world=q;o.clip=camera.vp*vec4f(q,1);o.normal=vec3f(0,1,0);o.color=vec3f(.48,.81,.87);o.kind=3u;return o;}
 @fragment fn fs(i:Out)->@location(0) vec4f{var color=i.color;var alpha=1.;if(i.kind==0u||i.kind==4u){let diffuse=.48+.52*max(0.,dot(normalize(i.normal),normalize(vec3f(-.4,.8,.6))));color*=diffuse;
  if(i.kind==4u){let view=normalize(camera.eye.xyz-i.world);let halfVector=normalize(view+normalize(vec3f(-.4,.8,.6)));let highlight=pow(max(0.,dot(normalize(i.normal),halfVector)),36.);let rim=pow(1.-max(0.,dot(normalize(i.normal),view)),3.);color+=vec3f(.65,.85,.83)*highlight*.28+vec3f(.12,.22,.22)*rim*.28;}
  }
- if(i.kind==1u){let line=min(abs(fract(i.world.x)-.5),abs(fract(i.world.z)-.5));let edge=1.-smoothstep(.005,.045,line);color+=vec3f(.022,.04,.05)*edge;let major=min(abs(fract(i.world.x/5.)-.5),abs(fract(i.world.z/5.)-.5));color+=vec3f(.02,.035,.042)*(1.-smoothstep(.002,.01,major));}
+ if(i.kind==1u){color*=.35+.65*max(0.,dot(normalize(i.normal),normalize(vec3f(-.6,.7,.3))));color+=vec3f(.04,.09,.085)*clamp(-i.world.y,0.,1.);let line=min(abs(fract(i.world.x)-.5),abs(fract(i.world.z)-.5));let edge=1.-smoothstep(.005,.045,line);color+=vec3f(.022,.04,.05)*edge;let major=min(abs(fract(i.world.x/5.)-.5),abs(fract(i.world.z/5.)-.5));color+=vec3f(.02,.035,.042)*(1.-smoothstep(.002,.01,major));}
  if(i.kind==2u){color=ramp(fieldValue(field[idx(i.world)]));alpha=.38;let c=fract((i.world.xz+20.)/1.25);let edge=min(min(c.x,c.y),min(1.-c.x,1.-c.y));color*=.8+.2*smoothstep(0.,.035,edge);}
  let fog=1.-exp(-length(camera.eye.xyz-i.world)*.006);color=mix(color,vec3f(.055,.102,.13),fog);return vec4f(color,alpha);}

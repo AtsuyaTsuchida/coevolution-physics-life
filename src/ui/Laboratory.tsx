@@ -4,6 +4,10 @@ import { defaults, modes, presets, type Config } from '../core/Config';
 import { createGPU } from '../core/GPUContext';
 import { Simulation } from '../core/Simulation';
 import { Renderer } from '../rendering/Renderer';
+import {
+  runGroundValidation,
+  type GroundReport,
+} from '../core/GroundExperiments';
 import { runValidation, type ValidationReport } from '../core/Experiments';
 import { exportExperiment, type Metric } from '../metrics/Metrics';
 import { materialNames, materialColors } from '../creatures/VoxelMaterial';
@@ -81,8 +85,10 @@ export default function Laboratory() {
     [metric, setMetric] = useState<Metric>(),
     [history, setHistory] = useState<Metric[]>([]),
     [fps, setFps] = useState(0),
+    [groundDepth, setGroundDepth] = useState(0),
     [gpu, setGpu] = useState('WebGPU compute'),
     [busy, setBusy] = useState(false),
+    [groundReport, setGroundReport] = useState<GroundReport>(),
     [report, setReport] = useState<ValidationReport>(),
     [preset, setPreset] = useState('C · Strong coevolution');
   const update = (key: keyof Config, value: number | boolean) => {
@@ -158,6 +164,7 @@ export default function Laboratory() {
         );
         setStatus('Running');
         setMetric(sim.records.at(-1));
+        setGroundDepth(sim.groundDepth);
         const animate = async (now: number) => {
           if (dead) return;
           try {
@@ -187,6 +194,7 @@ export default function Laboratory() {
                 if (dead) return;
                 pending = false;
                 setMetric(sim.records.at(-1));
+                setGroundDepth(sim.groundDepth);
                 setHistory(sim.records.slice(-240));
               }
             }
@@ -223,6 +231,7 @@ export default function Laboratory() {
   function reset() {
     setError('');
     setReport(undefined);
+    setGroundReport(undefined);
     setStatus('Initializing WebGPU…');
     setHistory([]);
     setMetric(undefined);
@@ -253,10 +262,45 @@ export default function Laboratory() {
       setBusy(false);
     }
   }
+  async function validateGround() {
+    const e = engine.current;
+    if (!e) return;
+    running.current = true;
+    setBusy(true);
+    setGroundReport(undefined);
+    try {
+      const result = await runGroundValidation(
+        e.device,
+        settings.current.seed,
+        setStatus,
+        () => disposed.current || !running.current,
+      );
+      setGroundReport(result);
+      setStatus(
+        `${result.checks.filter((c) => c.pass).length} / 4 ground checks passed`,
+      );
+    } catch (err) {
+      setStatus(String(err));
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  }
   const exportData = () =>
     exportExperiment(
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        groundSnapshot: engine.current?.sim.lastGround
+          ? {
+              simulationTime: engine.current.sim.records.at(-1)?.simulationTime,
+              grid: [65, 65],
+              spacing: 0.625,
+              strideFloats: 4,
+              fields: ['height', 'verticalVelocity', 'contactLoad', 'reserved'],
+              data: Array.from(engine.current.sim.lastGround),
+            }
+          : undefined,
+        groundValidation: groundReport,
         initialConfig: engine.current?.sim.initialConfig,
         parameterChanges: engine.current?.sim.configChanges,
         fieldSnapshot: engine.current?.sim.lastField
@@ -380,6 +424,28 @@ export default function Laboratory() {
             onChange={(v) => update('diffusion', v)}
           />
           <div className="divider" />
+          <p className="eyebrow">DEFORMABLE GROUND</p>
+          <Toggle
+            label="Soft ground"
+            value={config.deformGround}
+            onChange={(v) => update('deformGround', v)}
+          />
+          <Range
+            label="Ground stiffness"
+            value={config.groundStiffness}
+            min={2}
+            max={40}
+            step={1}
+            onChange={(v) => update('groundStiffness', v)}
+          />
+          <p className="note">
+            Bodies press the ground down. Local viscosity slows its recovery;
+            stiffness resists sinking.
+          </p>
+          <div className="divider" />
+          <p className="note">
+            Deepest depression: {num(groundDepth, 3)} world units
+          </p>
           <p className="eyebrow">OBSERVATION</p>
           <Choice
             label="Body rendering"
@@ -610,6 +676,40 @@ export default function Laboratory() {
           >
             {busy ? 'Running GPU experiments…' : 'Run 4 success tests →'}
           </button>
+          <button
+            className="full"
+            disabled={busy || !metric}
+            onClick={validateGround}
+            style={{ marginTop: 8 }}
+          >
+            Test ground response →
+          </button>
+          <p className="note">
+            Original tests use a flat floor. Ground tests compare stiffness,
+            viscosity, contact and a flat control.
+          </p>
+          {groundReport && (
+            <div className="compare-report">
+              {groundReport.checks.map((c) => (
+                <p key={c.name}>
+                  {c.pass ? '✓' : '×'} {c.name}
+                </p>
+              ))}
+              <details>
+                <summary>Ground numerical evidence</summary>
+                <pre
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    fontSize: 11,
+                    maxHeight: 350,
+                    overflow: 'auto',
+                  }}
+                >
+                  {JSON.stringify(groundReport, null, 2)}
+                </pre>
+              </details>
+            </div>
+          )}
           {busy && (
             <button
               className="full"

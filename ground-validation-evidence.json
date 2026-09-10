@@ -1,0 +1,43 @@
+{
+  "seed": 2048,
+  "loadScale": 0.5,
+  "loadedSeconds": 12,
+  "unloadedSeconds": 2,
+  "checksPassed": 4,
+  "conditions": {
+    "soft": {
+      "stiffness": 4,
+      "viscosity": 0.3,
+      "loadedDepth": 1.0850634574890137,
+      "remainingDepth": 0.11506576091051102,
+      "remainingFraction": 0.10604519036774959,
+      "minimumVoxelCenterClearance": 0.14499963400203886,
+      "centerY": -0.49835499619404156
+    },
+    "hard": {
+      "stiffness": 32,
+      "viscosity": 0.3,
+      "loadedDepth": 0.201854407787323,
+      "remainingDepth": 5.231687083551151e-08,
+      "minimumVoxelCenterClearance": 0.14499969187247086,
+      "centerY": 0.2251243275860625
+    },
+    "slow": {
+      "stiffness": 4,
+      "viscosity": 3,
+      "loadedDepth": 0.8341113924980164,
+      "remainingDepth": 0.5115070343017578,
+      "remainingFraction": 0.6132358806056881,
+      "minimumVoxelCenterClearance": 0.14499984940379396,
+      "centerY": -0.33078805152927676
+    },
+    "flat": {
+      "loadedDepth": 0,
+      "remainingDepth": 0,
+      "minimumVoxelCenterClearance": 0.14499999582767487,
+      "centerY": 0.3763194117815264
+    }
+  },
+  "allFinite": true,
+  "source": "GPU diagnostic results read from Ground numerical evidence in the local browser"
+}

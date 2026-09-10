@@ -5,6 +5,7 @@ import {
   WebGPUCoordinateSystem,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import groundSample from '../shaders/terrainSample.wgsl?raw';
 import code from '../shaders/render.wgsl?raw';
 import { buffer, shader } from '../core/GPUContext';
 import { CreatureSurface } from './CreatureSurface';
@@ -102,7 +103,7 @@ export class Renderer {
     const shaderModule = await shader(
       this.device,
       'GPU instanced voxel renderer',
-      code,
+      code + groundSample,
     );
     const layout = this.device.createBindGroupLayout({
       entries: [
@@ -111,7 +112,7 @@ export class Renderer {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
-        ...[1, 2, 3, 4, 5, 6].map((binding) => ({
+        ...[1, 2, 3, 4, 5, 6, 7].map((binding) => ({
           binding,
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' as const },
@@ -183,6 +184,7 @@ export class Renderer {
             this.surface.vertices,
             this.surface.deformed,
             this.surface.normalLinks,
+            sim.ground.state,
           ].map((buffer, binding) => ({ binding, resource: { buffer } })),
         }),
       ),
@@ -246,7 +248,7 @@ export class Renderer {
     });
     pass.setBindGroup(0, this.groups[s.voxelIndex][s.fieldIndex]);
     pass.setPipeline(this.pipelines.ground);
-    pass.draw(6);
+    pass.draw(64 * 64 * 6);
     if (c.showVoxels) {
       if (c.surfaceMode === 0) {
         pass.setPipeline(this.pipelines.mesh);

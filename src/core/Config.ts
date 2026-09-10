@@ -1,4 +1,6 @@
 export interface Config {
+  deformGround: boolean;
+  groundStiffness: number;
   seed: number;
   initialCount: number;
   maxCount: number;
@@ -31,6 +33,8 @@ export interface Config {
   glyphStep: number;
 }
 export const defaults: Config = {
+  deformGround: true,
+  groundStiffness: 8,
   seed: 2048,
   initialCount: 240,
   maxCount: 480,
@@ -55,7 +59,7 @@ export const defaults: Config = {
   mode: 1,
   surfaceMode: 0,
   showVoxels: true,
-  showField: true,
+  showField: false,
   showSensors: true,
   showGravity: false,
   slice: 0.04,

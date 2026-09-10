@@ -92,3 +92,21 @@ GPU上のparallel衝突集計順序に由来する小差があります。再実
 - During lifecycle QA, deaths reached 238. With temporary QA settings (basal and muscle cost 0, birth threshold 90, speed 4), 3 births produced new surfaces without error. These settings were then discarded by reloading the normal defaults. This is a rendering lifecycle check, not additional evidence of adaptation.
 - Default mesh: 262,640 shared vertices / 524,384 triangles for 240 bodies. The initial material-view mesh run displayed approximately 118–119 FPS on the same M5 Max. This remains a frame-rate observation, not a GPU timestamp benchmark.
 - The visible skin is an approximation around the physical voxels; severe folds may self-intersect. It is not a change to a continuum/FEM physics model.
+
+
+## Deformable ground update — 2026-09-10
+
+新しい地面機能のGPU比較試験は4 / 4成功（seed 2048）。同一個体、筋活動OFF、環境進化OFF。各条件12 simulated secondsの荷重後、個体を除去し2秒の復元を測定。診断worldはlive worldと独立しています。
+
+| 条件 | 荷重時の最大深さ | 除荷2秒後 | 残存率 |
+|---|---:|---:|---:|
+| 軟：stiffness 4、viscosity 0.3 | 1.085063 | 0.115066 | 10.60% |
+| 硬：stiffness 32、viscosity 0.3 | 0.201854 | 0.0000000523 | 0.000026% |
+| 高粘性：stiffness 4、viscosity 3 | 0.834111 | 0.511507 | 61.32% |
+| 地面変形OFF | 0 | 0 | — |
+
+全条件finite。Voxel中心の地表からの最小クリアランスは0.1449996以上（目標0.145）。軟地面の個体重心Yは−0.498355、固定床は0.376319となり、表示だけでなく接触が変化することを確認。異なる初期くぼみからの復元であるため、粘性による残存率はこのfixtureでの比較であり材料定数の厳密測定ではありません。数値は `ground-validation-evidence.json` に保存。
+
+地面は近似荷重を受ける過減衰モデルで、厳密な運動量・エネルギー保存や土壌材料の再現を保証しません。地面の描画三角形と接触高さは同じ補間を使用しますが、生物の装飾skin全体の非交差を証明する検証ではありません。長期の適応進化に関する旧結果を、新しい地面の科学的検証として流用していません。
+
+回帰確認：地面OFFを明示した既存GPU 4試験も4 / 4成功。筋活動ONの水平移動0.06866537、OFF 0.00013537。局所物理応答、環境構造化、matched-seed生態軌道の分岐もpass。今回の固定床再実行値は上記の過去実行値を置き換えず、別実行として記録します。CPUテスト7 / 7、TypeScript、scoped lint、production build成功。ブラウザにGPUエラー表示なし。

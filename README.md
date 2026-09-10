@@ -52,7 +52,7 @@ DescriptorはVoxel数、bounding box比、露出面数、compactness、X対称�
 
 ## GPU Simulation
 
-固定刻み1/120秒。描画フレームの時間から必要なstep数を決め、1 frame最大8 stepに制限します。遅いGPUではsimulation timeがwall timeより遅くなります。速度スライダーは目標倍率です。
+固定刻み1/120秒。各stepの冒頭で地面への荷重集計・地面変形を行います。描画フレームの時間から必要なstep数を決め、1 frame最大8 stepに制限します。遅いGPUではsimulation timeがwall timeより遅くなります。速度スライダーは目標倍率です。
 
 各stepで次を順番にdispatchします。
 
@@ -93,7 +93,7 @@ GPU bufferはmax population × 80のcapacityを確保しますが、**先頭のa
 
 ### CPU readback
 
-通常はsimulation time 1秒ごとに個体summary（128 B × max count）と物理場の計測snapshot（786,432 B）を一度readbackします。デフォルト約0.85 MB / simulated second。CPUがこの時点で死亡・繁殖を処理するため、反映には最大約1 simulated secondの遅延があります。各フレームの位置readbackはありません。検証時だけ単体身体の全状態をreadbackします。
+通常はsimulation time 1秒ごとに個体summary（128 B × max count）と物理場の計測snapshot（786,432 B）を一度readbackします。地面snapshot（67,600 B）も同じタイミングで取得し、デフォルト合計約0.92 MB / simulated second。CPUがこの時点で死亡・繁殖を処理するため、反映には最大約1 simulated secondの遅延があります。各フレームの位置readbackはありません。検証時だけ単体身体の全状態をreadbackします。
 
 将来はfield平均・分散もGPU reductionし、field全体の低頻度readbackをさらに削減できます。
 
@@ -148,7 +148,7 @@ Inspect organismで1個体を拡大・追尾し、World viewで全体表示へ�
 - Gravity / drag / viscosityの平均と分散。
 - 剛性対局所gravity、サイズ対局所gravity、筋比率対局所viscosityのPearson r。個体内全Voxelのsampleを平均。分散不足はnull。
 
-相関は因果の証明ではありません。UIの「Run 4 success tests」で対照実験を行い、ExportからJSONを保存してください。exportは初期設定、途中の設定変更時刻、全記録、現在genome、最後のfield snapshot、検証結果を含みます。
+相関は因果の証明ではありません。UIの「Run 4 success tests」で対照実験を行い、ExportからJSONを保存してください。exportは初期設定、途中の設定変更時刻、全記録、現在genome、最後のfield / ground snapshot、検証結果を含みます（schemaVersion 2）。
 
 ## Experiments
 
@@ -192,3 +192,15 @@ XPBD multiplier、volume/shear constraints、GPU field reductions、resource dif
 - [Three.js WebGPU renderer documentation](https://threejs.org/docs/pages/WebGPURenderer.html)
 
 これらはAPIとメモリ設計の参照であり、このモデルの科学的妥当性の実証ではありません。
+
+## 変形する地面
+
+`Soft ground` は初期ON。`Ground stiffness` を下げると沈みやすくなります。地面は65 × 65頂点、64 × 64 quad / 8,192 triangles、間隔0.625の連続したheightfieldです。`Inspect organism`でも地面を表示します。初期状態では断面ヒートマップをOFFにし、凹凸と陰影を観察できます。
+
+GPUで接触付近のVoxel質量・下向き重力から近似荷重を求め、4近傍の地面頂点へ固定小数点atomicで分配します。地面は過減衰の弾性基盤モデルです。`heightRate = (3 × neighborLaplacian − stiffness × height − load) / damping`。stiffnessは操作値 × (1 + local repulsion × 0.3)、dampingは3 + local viscosity × 12。空間の重力・粘性・反発特性が変わると、地面の変形にも反映されます。地面自体に独立した遺伝子を追加したものではありません。
+
+高さと速度はGPUに保持し、同じ三角形補間を描画、Voxel接触、栄養摂取高度に使います。接触法線に沿った位置補正と、地面の鉛直速度に対する相対移動から摩擦を計算します。栄養の高さ減衰は絶対高度ではなく地表からの高さを使い、沈み込んだだけで摂取量が増える問題を避けます。地面のON/OFFは生物を瞬間的に押し上げず、速度制限内で平面へ戻します。完全な固定地面の比較はOFFにしてResetしてください。
+
+これは荷重を近似する視覚・接触モデルで、保存的な土壌力学やFEMではありません。接触インパルス全体の厳密な反作用、塑性変形、掘削、横方向の地面移動はありません。境界は固定、深さは1.2、変形速度は0.6 world units/sが上限です。Voxel中心のクリアランスを保証する近似接触であり、描画用の生物skinには局所的な地面との交差が起こり得ます。地面の変形は足場を変えるため、生態の軌道も以前とは変わります。
+
+`Test ground response` は別の診断worldで同一seed・同一bodyを使い、軟／硬、高／低粘性、接触と平面対照を比較します。12秒の荷重後にbodyを取り除き、2秒の復元を測定します。従来の`Run 4 success tests`は地面OFFを明示し、元の固定床条件を維持します。数値結果はUIとJSON exportから確認できます。

@@ -25,6 +25,7 @@ export async function runValidation(
     new Simulation(device, {
       ...defaults,
       seed,
+      deformGround: false,
       initialCount: 32,
       maxCount: 80,
       initialVoxels: 32,
