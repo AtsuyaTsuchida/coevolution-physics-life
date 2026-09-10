@@ -1,4 +1,5 @@
 export interface Config {
+  demoMode: number;
   deformGround: boolean;
   groundStiffness: number;
   seed: number;
@@ -33,6 +34,7 @@ export interface Config {
   glyphStep: number;
 }
 export const defaults: Config = {
+  demoMode: 0,
   deformGround: true,
   groundStiffness: 8,
   seed: 2048,
@@ -65,6 +67,19 @@ export const defaults: Config = {
   slice: 0.04,
   sliceAxis: 1,
   glyphStep: 4,
+};
+export const showcaseConfig: Config = {
+  ...defaults,
+  demoMode: 1,
+  mode: 0,
+  initialCount: 4,
+  maxCount: 4,
+  iterations: 40,
+  stability: 1,
+  actuatorStrength: 1,
+  creatureEvolution: false,
+  physicsEvolution: false,
+  groundStiffness: 24,
 };
 export const presets = {
   'A · Fixed physics': {

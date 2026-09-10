@@ -1,0 +1,38 @@
+{
+  "seed": 2048,
+  "simulationSeconds": 16,
+  "settlingSeconds": 4,
+  "sampleIntervalSeconds": 0.5,
+  "minimumCenterGroundClearance": 0.4349999209698582,
+  "source": "Local browser GPU experiment numerical evidence",
+  "bodies": [
+    {
+      "name": "Ribbon",
+      "activeHorizontalPath": 1.380583404430042,
+      "passiveHorizontalPath": 5.24779107502245e-06,
+      "maximumCenteredVoxelMovementRMS": 1.1371318204539753,
+      "signedXYMarkerRotationRadians": 0.2293653399010679
+    },
+    {
+      "name": "Crawler",
+      "activeHorizontalPath": 1.6468147944934637,
+      "passiveHorizontalPath": 7.02634984688088e-06,
+      "maximumCenteredVoxelMovementRMS": 1.441737649066252,
+      "signedXYMarkerRotationRadians": 0.18300923624583076
+    },
+    {
+      "name": "Star",
+      "activeHorizontalPath": 0.32094502496691696,
+      "passiveHorizontalPath": 2.5119612573381802e-06,
+      "maximumCenteredVoxelMovementRMS": 0.7277756960203836,
+      "signedXYMarkerRotationRadians": 0.7810944443340534
+    },
+    {
+      "name": "Roller",
+      "activeHorizontalPath": 2.081847336057655,
+      "passiveHorizontalPath": 0.0008823086086240106,
+      "maximumCenteredVoxelMovementRMS": 1.380266133218872,
+      "signedXYMarkerRotationRadians": 3.032969359827129
+    }
+  ]
+}

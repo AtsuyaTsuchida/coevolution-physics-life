@@ -35,12 +35,13 @@ const spacing = 0.5,
 
 /** Rest-pose isosurface. Generated only at birth, never from CPU position readback. */
 export function createSurface(phenotype: Phenotype): SurfaceMesh {
+  const voxelSize = phenotype.voxelSize ?? VOXEL_SIZE;
   const body = phenotype.meta,
     count = body.length / 16;
   const centers = Array.from({ length: count }, (_, i) => [
-    body[i * 16] / VOXEL_SIZE,
-    body[i * 16 + 1] / VOXEL_SIZE,
-    body[i * 16 + 2] / VOXEL_SIZE,
+    body[i * 16] / voxelSize,
+    body[i * 16 + 1] / voxelSize,
+    body[i * 16 + 2] / voxelSize,
   ]);
   const lower = [0, 1, 2].map(
     (a) =>
@@ -90,7 +91,7 @@ export function createSurface(phenotype: Phenotype): SurfaceMesh {
       q = gridPosition(b),
       t = (threshold - density[a]) / (density[b] - density[a]);
     const index = points.length / 3;
-    points.push(...p.map((v, i) => (v + (q[i] - v) * t) * VOXEL_SIZE));
+    points.push(...p.map((v, i) => (v + (q[i] - v) * t) * voxelSize));
     edgeVertices.set(key, index);
     return index;
   };
@@ -189,7 +190,7 @@ export function createSurface(phenotype: Phenotype): SurfaceMesh {
     weights = new Float32Array(vertexCount * 8),
     residuals = new Float32Array(vertexCount * 3);
   for (let v = 0; v < vertexCount; v++) {
-    const p = points.slice(v * 3, v * 3 + 3).map((x) => x / VOXEL_SIZE);
+    const p = points.slice(v * 3, v * 3 + 3).map((x) => x / voxelSize);
     const nearest = centers
       .map((c, i) => ({ i, d: c.reduce((s, x, a) => s + (x - p[a]) ** 2, 0) }))
       .sort((a, b) => a.d - b.d)

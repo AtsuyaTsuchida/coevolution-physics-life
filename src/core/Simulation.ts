@@ -50,7 +50,7 @@ export class Simulation {
     this.initialConfig = { ...config };
     this.manager = new CreatureManager(config);
     this.physics = new VoxelPhysics(device);
-    const cap = config.maxCount * MAX_BODY;
+    const cap = config.maxCount * (config.demoMode === 1 ? 512 : MAX_BODY);
     this.state = [
       buffer(device, 'Voxel state A', cap * 64),
       buffer(device, 'Voxel state B', cap * 64),
@@ -60,7 +60,11 @@ export class Simulation {
       buffer(device, 'Physics genome B', FIELD_CELLS * 48),
     ];
     this.meta = buffer(device, 'Active voxel metadata', cap * 64);
-    this.adjacency = buffer(device, '26-neighbor adjacency', cap * 26 * 4);
+    this.adjacency = buffer(
+      device,
+      'Body adjacency',
+      cap * (config.demoMode === 1 ? 124 : 26) * 4,
+    );
     this.creatures = buffer(device, 'Creature state', config.maxCount * 128);
     this.act = buffer(device, 'Actuator output', cap * 16);
     this.heads = buffer(device, 'Spatial grid heads', FIELD_CELLS * 4);
@@ -173,7 +177,7 @@ export class Simulation {
       c.seed,
       +c.deformGround,
       c.groundStiffness,
-      0,
+      c.demoMode,
     ]);
     this.device.queue.writeBuffer(this.uniform, 0, parameters);
     const e = this.device.createCommandEncoder();

@@ -119,33 +119,43 @@ export function Advanced({
   );
   return (
     <>
-      <details>
-        <summary>Population & body · reset to apply</summary>
-        {range('initialCount', 'Initial creatures', 1, 500, 1)}
-        {range('maxCount', 'Maximum creatures', 10, 1000, 10)}
-        {range('initialVoxels', 'Initial voxels', 20, 80, 1)}
-      </details>
+      {config.demoMode !== 1 && (
+        <details>
+          <summary>Population & body · reset to apply</summary>
+          {range('initialCount', 'Initial creatures', 1, 500, 1)}
+          {range('maxCount', 'Maximum creatures', 10, 1000, 10)}
+          {range('initialVoxels', 'Initial voxels', 20, 80, 1)}
+        </details>
+      )}
       <details>
         <summary>Creature mechanics</summary>
-        {range('iterations', 'Constraint iterations', 2, 16, 1)}
+        {range('iterations', 'Constraint iterations', 2, 40, 1)}
         {range('stability', 'Solver relaxation', 0.2, 1, 0.05)}
-        {range('actuatorStrength', 'Actuator strength', 0, 1.5, 0.05)}
+        {range(
+          'actuatorStrength',
+          'Actuator strength',
+          0,
+          config.demoMode === 1 ? 1.1 : 1.5,
+          0.05,
+        )}
       </details>
-      <details>
-        <summary>Evolution & metabolism</summary>
-        <Toggle
-          label="Creature evolution"
-          value={config.creatureEvolution}
-          onChange={(v) => onChange('creatureEvolution', v)}
-        />
-        {range('mutationRate', 'Gene mutation', 0, 0.4, 0.01)}
-        {range('addRate', 'Voxel addition', 0, 1, 0.01)}
-        {range('removeRate', 'Voxel removal', 0, 1, 0.01)}
-        {range('materialRate', 'Material mutation', 0, 0.5, 0.01)}
-        {range('metabolism', 'Basal metabolism', 0, 0.12, 0.001)}
-        {range('muscleCost', 'Muscle work cost', 0, 0.2, 0.001)}
-        {range('reproductionThreshold', 'Birth energy threshold', 90, 220, 5)}
-      </details>
+      {config.demoMode !== 1 && (
+        <details>
+          <summary>Evolution & metabolism</summary>
+          <Toggle
+            label="Creature evolution"
+            value={config.creatureEvolution}
+            onChange={(v) => onChange('creatureEvolution', v)}
+          />
+          {range('mutationRate', 'Gene mutation', 0, 0.4, 0.01)}
+          {range('addRate', 'Voxel addition', 0, 1, 0.01)}
+          {range('removeRate', 'Voxel removal', 0, 1, 0.01)}
+          {range('materialRate', 'Material mutation', 0, 0.5, 0.01)}
+          {range('metabolism', 'Basal metabolism', 0, 0.12, 0.001)}
+          {range('muscleCost', 'Muscle work cost', 0, 0.2, 0.001)}
+          {range('reproductionThreshold', 'Birth energy threshold', 90, 220, 5)}
+        </details>
+      )}
     </>
   );
 }

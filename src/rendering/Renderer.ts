@@ -100,6 +100,10 @@ export class Renderer {
   }
   async initialize(sim: Simulation) {
     await this.surface.initialize(sim);
+    if (sim.config.demoMode === 1) {
+      this.camera.position.set(17, 17, 22);
+      this.orbit.target.set(0, 1, 0);
+    }
     const shaderModule = await shader(
       this.device,
       'GPU instanced voxel renderer',
@@ -216,7 +220,7 @@ export class Renderer {
     const data = new Float32Array([
       ...vp.elements,
       ...this.camera.position.toArray(),
-      0,
+      c.demoMode,
       c.mode,
       +c.showSensors,
       c.slice,
@@ -271,25 +275,34 @@ export class Renderer {
     pass.end();
     this.device.queue.submit([e.finish()]);
   }
-  inspectCreature() {
+  inspectCreature(slot?: number) {
     const sim = this.sim;
     if (!sim?.lastSnapshot || !sim.manager.individuals.size) return;
     const states = sim.lastSnapshot;
-    const organism = [...sim.manager.individuals.values()].sort(
-      (a, b) =>
-        Math.hypot(states[a.slot * 32 + 16], states[a.slot * 32 + 18]) -
-        Math.hypot(states[b.slot * 32 + 16], states[b.slot * 32 + 18]),
-    )[0];
+    const organism =
+      (slot === undefined ? undefined : sim.manager.individuals.get(slot)) ??
+      [...sim.manager.individuals.values()].sort(
+        (a, b) =>
+          Math.hypot(states[a.slot * 32 + 16], states[a.slot * 32 + 18]) -
+          Math.hypot(states[b.slot * 32 + 16], states[b.slot * 32 + 18]),
+      )[0];
     this.focusedSlot = organism.slot;
     const k = organism.slot * 32;
     this.orbit.target.set(states[k + 16], states[k + 17], states[k + 18]);
-    this.camera.position.copy(this.orbit.target).add(new Vector3(2.5, 1.7, 3));
+    this.camera.position
+      .copy(this.orbit.target)
+      .add(
+        new Vector3(2.5, 1.7, 3).multiplyScalar(
+          sim.config.demoMode === 1 ? 2.5 : 1,
+        ),
+      );
     this.orbit.update();
   }
   worldView() {
     this.focusedSlot = -1;
     this.orbit.target.set(0, 1, 0);
-    this.camera.position.set(25, 24, 30);
+    if (this.sim?.config.demoMode === 1) this.camera.position.set(17, 17, 22);
+    else this.camera.position.set(25, 24, 30);
     this.orbit.update();
   }
   dispose() {

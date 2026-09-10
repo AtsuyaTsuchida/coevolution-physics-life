@@ -2,6 +2,7 @@ import { coordinates, occupied, type Genome } from './CreatureGenome';
 import { density, damping } from './VoxelMaterial';
 import { VOXEL_SIZE } from '../core/Config';
 export interface Phenotype {
+  voxelSize?: number;
   meta: Float32Array;
   adjacency: Uint32Array;
   indices: number[];
@@ -16,6 +17,7 @@ export interface MorphologyGenerator {
   ): Phenotype;
 }
 export class DirectMorphologyGenerator implements MorphologyGenerator {
+  constructor(public scale = 1) {}
   generate(
     g: Genome,
     creatureID: number,
@@ -46,9 +48,10 @@ export class DirectMorphologyGenerator implements MorphologyGenerator {
       }
       const begin = links.length;
       let exposed = 6;
-      for (let z = -1; z <= 1; z++)
-        for (let y = -1; y <= 1; y++)
-          for (let x = -1; x <= 1; x++) {
+      const reach = this.scale > 1 ? 2 : 1;
+      for (let z = -reach; z <= reach; z++)
+        for (let y = -reach; y <= reach; y++)
+          for (let x = -reach; x <= reach; x++) {
             if (!x && !y && !z) continue;
             const q = [xyz[0] + x, xyz[1] + y, xyz[2] + z];
             if (q.some((v) => v < 0 || v > 7)) continue;
@@ -62,9 +65,9 @@ export class DirectMorphologyGenerator implements MorphologyGenerator {
       if (index.has(7 - xyz[0] + xyz[1] * 8 + xyz[2] * 64)) sym++;
       meta.set(
         [
-          (xyz[0] - 3.5) * VOXEL_SIZE,
-          xyz[1] * VOXEL_SIZE,
-          (xyz[2] - 3.5) * VOXEL_SIZE,
+          (xyz[0] - 3.5) * VOXEL_SIZE * this.scale,
+          xyz[1] * VOXEL_SIZE * this.scale,
+          (xyz[2] - 3.5) * VOXEL_SIZE * this.scale,
           mat,
           density[mat],
           mat === 1 ? 0.98 : g.cells[k + 2],
@@ -77,13 +80,14 @@ export class DirectMorphologyGenerator implements MorphologyGenerator {
           linkOffset + begin,
           links.length - begin,
           cell,
-          0,
+          this.scale,
         ],
         i * 16,
       );
     });
     const dims = max.map((v, i) => v - min[i] + 1);
     return {
+      voxelSize: VOXEL_SIZE * this.scale,
       meta,
       adjacency: new Uint32Array(links),
       indices,

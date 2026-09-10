@@ -464,6 +464,8 @@ input[type='number'] {
 }
 
 .view-tools {
+  flex-wrap: wrap;
+  max-width: calc(100% - 24px);
   position: absolute;
   right: 16px;
   top: 8px;

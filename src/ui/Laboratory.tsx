@@ -1,15 +1,23 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { defaults, modes, presets, type Config } from '../core/Config';
+import {
+  defaults,
+  showcaseConfig,
+  modes,
+  presets,
+  type Config,
+} from '../core/Config';
 import { createGPU } from '../core/GPUContext';
 import { Simulation } from '../core/Simulation';
 import { Renderer } from '../rendering/Renderer';
+import { runShowcaseValidation } from '../core/ShowcaseExperiments';
 import {
   runGroundValidation,
   type GroundReport,
 } from '../core/GroundExperiments';
 import { runValidation, type ValidationReport } from '../core/Experiments';
 import { exportExperiment, type Metric } from '../metrics/Metrics';
+import { showcaseNames } from '../creatures/ShowcaseGenome';
 import { materialNames, materialColors } from '../creatures/VoxelMaterial';
 import { Choice, Range, Toggle, Advanced } from './Controls';
 const num = (n: number | undefined, d = 0) =>
@@ -74,11 +82,11 @@ export default function Laboratory() {
       renderer: Renderer;
       device: GPUDevice;
     } | null>(null),
-    settings = useRef<Config>({ ...defaults }),
+    settings = useRef<Config>({ ...showcaseConfig }),
     running = useRef(false),
     disposed = useRef(false);
   const [activeSeed, setActiveSeed] = useState(defaults.seed);
-  const [config, setConfig] = useState<Config>({ ...defaults }),
+  const [config, setConfig] = useState<Config>({ ...showcaseConfig }),
     [revision, setRevision] = useState(0),
     [status, setStatus] = useState('Initializing WebGPU…'),
     [error, setError] = useState(''),
@@ -90,7 +98,7 @@ export default function Laboratory() {
     [busy, setBusy] = useState(false),
     [groundReport, setGroundReport] = useState<GroundReport>(),
     [report, setReport] = useState<ValidationReport>(),
-    [preset, setPreset] = useState('C · Strong coevolution');
+    [preset, setPreset] = useState('A · Fixed physics');
   const update = (key: keyof Config, value: number | boolean) => {
     settings.current = { ...settings.current, [key]: value };
     if (
@@ -262,14 +270,16 @@ export default function Laboratory() {
       setBusy(false);
     }
   }
-  async function validateGround() {
+  async function validateGround(showcase = false) {
     const e = engine.current;
     if (!e) return;
     running.current = true;
     setBusy(true);
     setGroundReport(undefined);
     try {
-      const result = await runGroundValidation(
+      const result = await (
+        showcase ? runShowcaseValidation : runGroundValidation
+      )(
         e.device,
         settings.current.seed,
         setStatus,
@@ -277,7 +287,7 @@ export default function Laboratory() {
       );
       setGroundReport(result);
       setStatus(
-        `${result.checks.filter((c) => c.pass).length} / 4 ground checks passed`,
+        `${result.checks.filter((c) => c.pass).length} / 4 response checks passed`,
       );
     } catch (err) {
       setStatus(String(err));
@@ -300,7 +310,7 @@ export default function Laboratory() {
               data: Array.from(engine.current.sim.lastGround),
             }
           : undefined,
-        groundValidation: groundReport,
+        responseValidation: groundReport,
         initialConfig: engine.current?.sim.initialConfig,
         parameterChanges: engine.current?.sim.configChanges,
         fieldSnapshot: engine.current?.sim.lastField
@@ -347,6 +357,31 @@ export default function Laboratory() {
       </section>
       <div className="workspace">
         <aside>
+          <Choice
+            label="World mode"
+            value={config.demoMode === 1 ? 'Four giants' : 'Coevolution colony'}
+            items={['Four giants', 'Coevolution colony']}
+            onChange={(v) => {
+              settings.current = {
+                ...(v === 'Four giants' ? showcaseConfig : defaults),
+                seed: settings.current.seed,
+              };
+              setConfig({ ...settings.current });
+              setPreset(
+                v === 'Four giants'
+                  ? 'A · Fixed physics'
+                  : 'C · Strong coevolution',
+              );
+              reset();
+            }}
+          />
+          {config.demoMode === 1 && (
+            <p className="note">
+              Four authored bodies: ribbon, crawler, star and roller.
+              Coordinated muscles drive motion; energy is replenished for
+              continuous observation. These gaits are not evolved.
+            </p>
+          )}
           <p className="eyebrow">EXPERIMENT</p>
           <h2>Life ↔ Physics</h2>
           <Choice
@@ -515,6 +550,16 @@ export default function Laboratory() {
           </div>
           <div className="viewport">
             <div className="view-tools">
+              {config.demoMode === 1 &&
+                showcaseNames.map((name, i) => (
+                  <button
+                    key={name}
+                    title={name}
+                    onClick={() => engine.current?.renderer.inspectCreature(i)}
+                  >
+                    {name.split(' · ')[0]}
+                  </button>
+                ))}
               <button
                 disabled={!metric}
                 onClick={() => engine.current?.renderer.inspectCreature()}
@@ -679,7 +724,7 @@ export default function Laboratory() {
           <button
             className="full"
             disabled={busy || !metric}
-            onClick={validateGround}
+            onClick={() => validateGround()}
             style={{ marginTop: 8 }}
           >
             Test ground response →
@@ -688,6 +733,15 @@ export default function Laboratory() {
             Original tests use a flat floor. Ground tests compare stiffness,
             viscosity, contact and a flat control.
           </p>
+          {config.demoMode === 1 && (
+            <button
+              className="full"
+              disabled={busy || !metric}
+              onClick={() => validateGround(true)}
+            >
+              Test four-body motion →
+            </button>
+          )}
           {groundReport && (
             <div className="compare-report">
               {groundReport.checks.map((c) => (
@@ -696,7 +750,7 @@ export default function Laboratory() {
                 </p>
               ))}
               <details>
-                <summary>Ground numerical evidence</summary>
+                <summary>Response numerical evidence</summary>
                 <pre
                   style={{
                     whiteSpace: 'pre-wrap',

@@ -1,3 +1,4 @@
+import { showcaseGenome } from './ShowcaseGenome';
 import { RNG, clamp, type Config } from '../core/Config';
 import { randomGenome, type Genome } from './CreatureGenome';
 import {
@@ -26,6 +27,19 @@ export class CreatureManager {
   total = 0;
   constructor(public config: Config) {
     this.rng = new RNG(config.seed);
+    if (config.demoMode === 1) {
+      this.generator = new DirectMorphologyGenerator(3);
+      for (let i = 0; i < 4; i++)
+        this.add(
+          showcaseGenome(i),
+          i,
+          [i % 2 === 0 ? -5 : 5, 0.5, i < 2 ? -5 : 5],
+          0,
+        );
+      this.nextID = 4;
+      this.pack();
+      return;
+    }
     const side = Math.ceil(Math.sqrt(config.initialCount));
     for (let i = 0; i < config.initialCount; i++) {
       const x =
@@ -122,6 +136,7 @@ export class CreatureManager {
       ]),
     );
     const newborn: number[] = [];
+    if (this.config.demoMode === 1) return { old, newborn, changed: false };
     for (const [id, c] of this.individuals) {
       const energy = snapshot[id * 32 + 2];
       if (energy <= 0 || !Number.isFinite(energy)) {

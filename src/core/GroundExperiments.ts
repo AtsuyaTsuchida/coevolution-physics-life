@@ -2,6 +2,7 @@ import { Simulation } from './Simulation';
 import { defaults } from './Config';
 import { initialField } from '../environment/PhysicsField';
 export interface GroundReport {
+  kind?: 'ground' | 'showcase';
   seed: number;
   checks: { name: string; pass: boolean; evidence: Record<string, unknown> }[];
 }
@@ -102,6 +103,7 @@ export async function runGroundValidation(
     flat = await run(4, 0.3, false);
   return {
     seed,
+    kind: 'ground',
     checks: [
       {
         name: 'Softer ground sinks further under the same body',
