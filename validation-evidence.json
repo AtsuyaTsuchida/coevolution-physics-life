@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-10",
+  "seed": 2048,
+  "gpu": "Apple M5 Max, 40 cores",
+  "source": "In-app browser GPU validation, final implementation",
+  "scope": "Recorded evidence summary. Full time series can be regenerated and exported in the app.",
+  "cpuTestsPassed": 5,
+  "gpuTestsPassed": 4,
+  "motion": {
+    "secondsAfterSettling": 14,
+    "settlingSeconds": 4,
+    "active": {"horizontal": 0.08079574014892996, "shapeRMS": 0.12269138221622132},
+    "passive": {"horizontal": 0.00014730469624379494, "shapeRMS": 0.00022909407279913293}
+  },
+  "localPhysics": {
+    "lowGravity": {"sampledGravity": 2, "horizontal": 0.07743420471727107, "shapeRMS": 0.044257097856557896},
+    "highGravity": {"sampledGravity": 14.000000953674316, "horizontal": 0.2702240360272622, "shapeRMS": 0.20061869090339035}
+  },
+  "fieldDiversity": {"initial": 0.0000034136215259113328, "fixed": 0.0000034136215259113328, "noInfluence": 0.000009935346483634195, "coevolution": 0.0015768462666110763},
+  "seconds": 120,
+  "fixed": {
+    "alive": 32, "voxels": 1007, "births": 1, "deaths": 1,
+    "meanEnergy": 39.362453669309616, "meanBodySize": 31.46875,
+    "morphologyDiversity": 0.05904524680380734,
+    "genomeDiversity": 0.086822509765625, "genomeFingerprint": "f6dc197a",
+    "materialDistribution": [0.15292949354518373,0.1390268123138034,0.13505461767626614,0.14498510427010927,0.14796425024826218,0.1390268123138034,0.141012909632572],
+    "finite": true
+  },
+  "coevolution": {
+    "alive": 36, "voxels": 1131, "births": 6, "deaths": 2,
+    "meanEnergy": 51.43413237730662, "meanBodySize": 31.416666666666668,
+    "morphologyDiversity": 0.05922362507487328,
+    "genomeDiversity": 0.08314344618055555, "genomeFingerprint": "19ddc0ff",
+    "materialDistribution": [0.1547303271441203,0.14058355437665782,0.1335101679929266,0.14500442086648985,0.14235190097259062,0.1423519009725906,0.14146772767462423],
+    "finite": true
+  }
+}

@@ -1,0 +1,4 @@
+@group(0) @binding(1) var<storage,read> bodyMeta:array<Meta>;
+@group(0) @binding(2) var<storage,read> creatures:array<Creature>;
+@group(0) @binding(3) var<storage,read_write> actuators:array<vec4f>;
+@compute @workgroup_size(128) fn main(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=u32(params.counts.x)){return;}let m=bodyMeta[i];let c=creatures[u32(m.physical.w)];let signal=tanh(dot(c.sensor,c.controller));let phase=m.actuator.z+signal*.8;let amplitude=clamp(m.actuator.x*params.mechanical.y*(1.+signal*.35),0.,.4);var stretch=vec3f(1);if(m.rest.w>=2.&&m.rest.w<=4.){stretch[u32(m.rest.w)-2u]+=amplitude*sin(6.2831853*m.actuator.y*params.clock.x+phase);}actuators[i]=vec4f(stretch,abs(amplitude*6.2831853*m.actuator.y*cos(6.2831853*m.actuator.y*params.clock.x+phase))*select(0.,1.,m.rest.w>=2.&&m.rest.w<=4.));}

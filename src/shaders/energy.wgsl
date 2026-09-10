@@ -1,0 +1,7 @@
+@group(0) @binding(1) var<storage,read_write> voxels:array<Voxel>;
+@group(0) @binding(2) var<storage,read> bodyMeta:array<Meta>;
+@group(0) @binding(3) var<storage,read_write> creatures:array<Creature>;
+@group(0) @binding(4) var<storage,read> field:array<Field>;
+@group(0) @binding(5) var<storage,read> act:array<vec4f>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=u32(params.counts.y)||creatures[i].lineage.w<.5){return;}var c=creatures[i];var cost=0.;var food=0.;var center=vec3f(0);var localG=0.;var visc=0.;for(var j=u32(c.info.x);j<u32(c.info.x+c.info.y);j++){let v=voxels[j];let m=bodyMeta[j];let f=field[cellIndex(cellAt(v.position.xyz))];let strain=v.velocity.w;let basal=params.ecology.x*m.physical.x;let work=params.ecology.y*act[j].w;let deformation=2.5*strain*strain;let dissipation=.002*f.medium.x*dot(v.velocity.xyz,v.velocity.xyz);let metabolism=basal+work+deformation+dissipation;let uptake=.095*nutrient(v.position.xyz)*f.nutrientState.x*exp(-v.position.y*.45)*(m.actuator.w/3.)*select(1.,1.8,m.rest.w==6.);cost+=metabolism;food+=uptake;center+=v.position.xyz;localG+=length(f.gravityDrag.xyz);visc+=f.medium.x;voxels[j].bio=vec4f(metabolism,uptake,strain,0);voxels[j].position.w=c.info.z/c.info.y;}
+ center/=max(1.,c.info.y);let dt=params.clock.y;c.info.z=clamp(c.info.z+(food-cost)*dt,-100.,600.);c.info.w+=dt;c.stats.x+=length(center-c.center.xyz);c.stats.y+=cost*dt;c.stats.z=localG/max(1.,c.info.y);c.stats.w=visc/max(1.,c.info.y);c.center=vec4f(center,c.center.w);creatures[i]=c;}
